@@ -7,3 +7,4 @@ analysis_report.md
 final_scores.json
 final_scores.md
 .final_score_cache.json
+node_modules/
