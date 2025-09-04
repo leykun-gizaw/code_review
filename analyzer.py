@@ -9,19 +9,23 @@ from threading import Lock
 from dotenv import load_dotenv
 from google import genai
 
+ANALYZER_TOOL_VERSION = "analyzer-0.1.0"
+
 load_dotenv()
 
 # --- AI Configuration ---
 # The script reads the API key from your environment variables for security.
-try:
-    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-    if not GOOGLE_API_KEY:
-        raise ValueError("GOOGLE_API_KEY environment variable not set.")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
-    client = genai.Client(api_key=GOOGLE_API_KEY)
-    print("✅ Gemini API configured successfully.")
-except (ValueError, Exception) as e:
-    raise RuntimeError(f"🔴 CRITICAL: Could not configure Gemini API. {e}")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+client = None
+if GOOGLE_API_KEY:
+    try:
+        client = genai.Client(api_key=GOOGLE_API_KEY)
+        print("✅ Gemini API configured successfully.")
+    except Exception as e:
+        print(f"⚠️  Gemini API init failed: {e}")
+else:
+    print("⚠️  GOOGLE_API_KEY not set; AI checks will fail.")
 
 
 # --- Rate Limiter & Caching Layer -------------------------------------------------
@@ -96,6 +100,8 @@ def generate_ai_content(prompt: str):
     for attempt in range(1, max_attempts + 1):
         _rate_limiter.acquire()
         try:
+            if client is None:
+                raise RuntimeError("AI client not configured (missing GOOGLE_API_KEY)")
             response = client.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=prompt,
@@ -268,107 +274,94 @@ def run_git_commit_count_check(check, repo_path):
         ]
 
 
-def main():
-    """Main function to load the rubric and orchestrate the analysis."""
-    print("--- 🚀 Custom Code Analyzer ---")
+def run_analyzer(repo_path: str, rubric_path: str = "rubric.yaml"):
+    """Run analysis programmatically.
+
+    Returns (md_report_str, json_obj, ai_cache_dict, total_passed, total_checks).
+    """
+    if not os.path.isdir(repo_path):
+        raise ValueError("Repository path invalid")
     try:
-        with open("rubric.yaml", "r") as f:
+        with open(rubric_path, "r", encoding="utf-8") as f:
             rubric = yaml.safe_load(f)
     except FileNotFoundError:
-        print(
-            "❌ ERROR: rubric.yaml not found! Please create it in the same directory."
-        )
-        return
+        raise FileNotFoundError("rubric.yaml not found")
 
-    repo_path = input("Enter the full path to the cloned repository: ")
-    if not os.path.isdir(repo_path):
-        print("❌ ERROR: The provided path is not a valid directory.")
-        return
-
-    print("\n--- 🔬 Starting Analysis ---")
     all_results = {}
     total_passed = 0
-
     check_functions = {
         "ai_check": run_ai_check,
         "file_exists": run_file_exists_check,
         "git_commit_count": run_git_commit_count_check,
     }
-
-    for i, check in enumerate(rubric["checks"], 1):
-        check_type = check.get("type")
-        title = f"{check.get('name', 'Unnamed Check')}"
-        print(f"\n▶ Running: {title}")
-
-        if check_type in check_functions:
-            passed, details = check_functions[check_type](check, repo_path)
+    for check in rubric["checks"]:
+        ctype = check.get("type")
+        title = check.get("name", "Unnamed Check")
+        if ctype in check_functions:
+            passed, details = check_functions[ctype](check, repo_path)
             if passed:
                 total_passed += 1
             all_results[title] = (passed, details)
         else:
-            all_results[title] = (
-                False,
-                [f"  - FAILED: Unknown check type '{check_type}'."],
-            )
+            all_results[title] = (False, [f"  - FAILED: Unknown check type '{ctype}'."])
 
-    print("\n\n✅ --- Final Analysis Report --- ✅")
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    # Build markdown string
+    lines = [
+        "# Analysis Report",
+        f"Generated: {timestamp}",
+        f"Total: {len(rubric['checks'])} | Passed: {total_passed} | Failed: {len(rubric['checks'])-total_passed}",
+        "---",
+    ]
     for title, (passed_status, details) in all_results.items():
-        status = "PASSED" if passed_status else "FAILED"
-        print(f"\n[{status}] {title}")
-        for detail in details:
-            print(detail)
+        state = "PASS" if passed_status else "FAIL"
+        lines.append(f"## [{state}] {title}")
+        for d in details:
+            content = d.lstrip()
+            if not content.startswith("- "):
+                content = content.replace("  - ", "", 1)
+            lines.append(f"- {content.strip()}")
+        lines.append("")
+    md_report = "\n".join(lines) + "\n"
 
-    print("\n\n--- 📊 Summary ---")
-    print(f"{total_passed} out of {len(rubric['checks'])} checks passed.")
-    print("--------------------")
+    json_obj = {
+        "generated_at": timestamp,
+        "summary": {
+            "total_checks": len(rubric["checks"]),
+            "passed": total_passed,
+            "failed": len(rubric["checks"]) - total_passed,
+        },
+        "checks": [
+            {
+                "name": title,
+                "status": "PASSED" if passed else "FAILED",
+                "details": [d.strip() for d in details],
+            }
+            for title, (passed, details) in all_results.items()
+        ],
+    }
+    # expose current AI cache snapshot
+    return md_report, json_obj, _ai_cache, total_passed, len(rubric["checks"])
 
-    # --- Persist report to disk ---
+
+def main():
+    repo_path = input("Enter the full path to the cloned repository: ")
     try:
-        md_path = os.getenv("REPORT_MD_PATH", "analysis_report.md")
-        json_path = os.getenv("REPORT_JSON_PATH", "analysis_report.json")
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-
-        # Build Markdown
-        lines = []
-        lines.append(f"# Analysis Report\n")
-        lines.append(f"Generated: {timestamp}\n")
-        lines.append(
-            f"Total: {len(rubric['checks'])} | Passed: {total_passed} | Failed: {len(rubric['checks']) - total_passed}\n"
+        md_report, json_obj, _cache, total_passed, total_checks = run_analyzer(
+            repo_path
         )
-        lines.append("---\n")
-        for title, (passed_status, details) in all_results.items():
-            state = "PASS" if passed_status else "FAIL"
-            lines.append(f"## [{state}] {title}\n")
-            for d in details:
-                # Normalize bullet formatting
-                content = d.lstrip()
-                if not content.startswith("- "):
-                    content = content.replace("  - ", "", 1)
-                lines.append(f"- {content.strip()}")
-            lines.append("")
-        with open(md_path, "w", encoding="utf-8") as f_md:
-            f_md.write("\n".join(lines))
-
-        # Build JSON
-        json_obj = {
-            "generated_at": timestamp,
-            "summary": {
-                "total_checks": len(rubric["checks"]),
-                "passed": total_passed,
-                "failed": len(rubric["checks"]) - total_passed,
-            },
-            "checks": [
-                {
-                    "name": title,
-                    "status": "PASSED" if passed else "FAILED",
-                    "details": [d.strip() for d in details],
-                }
-                for title, (passed, details) in all_results.items()
-            ],
-        }
-        with open(json_path, "w", encoding="utf-8") as f_json:
-            json.dump(json_obj, f_json, indent=2)
-        print(f"\n📝 Reports saved: {md_path}, {json_path}")
+    except Exception as e:
+        print(f"❌ ERROR: {e}")
+        return
+    md_path = os.getenv("REPORT_MD_PATH", "analysis_report.md")
+    json_path = os.getenv("REPORT_JSON_PATH", "analysis_report.json")
+    try:
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(md_report)
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(json_obj, f, indent=2)
+        print(f"Saved {md_path}, {json_path}")
+        print(f"Summary: {total_passed}/{total_checks} passed.")
     except Exception as e:
         print(f"⚠️  Could not write report files: {e}")
 

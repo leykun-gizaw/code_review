@@ -12,6 +12,8 @@ from google import genai
 
 load_dotenv()
 
+SCORER_TOOL_VERSION = "scorer-0.1.0"
+
 # Configuration
 RUBRIC_PATH = os.getenv("FINAL_SCORE_RUBRIC", "final_score_rubric.yaml")
 OVERRIDES_PATH = os.getenv("FINAL_SCORE_OVERRIDES", "final_score_overrides.json")
@@ -125,24 +127,24 @@ def safe_ai_call(client, model: str, prompt: str):
             raise
 
 
-def main():
-    # Expect first argument: path to analyzer output file (markdown, json, or raw text)
-    if len(sys.argv) < 2:
-        print("Usage: python final_scorer.py <analyzer_output_file>")
-        print(
-            "Tip: Run 'python analyzer.py > analyzer_output.txt' then 'python final_scorer.py analyzer_output.txt'"
-        )
-        sys.exit(1)
+def run_final_scorer(analyzer_source: str, is_json: bool = False):
+    """Run scorer programmatically.
 
-    input_path = sys.argv[1]
-    if input_path == "-":
-        analyzer_output = sys.stdin.read()
+    analyzer_source: markdown text OR JSON string from analyzer.
+    is_json: if True, treat analyzer_source as JSON and build a compact structured prompt.
+    Returns (md_report_str, json_obj, ai_cache_dict, overall_score)
+    """
+    if is_json:
+        try:
+            analyzer_obj = json.loads(analyzer_source)
+            compact_lines = []
+            for c in analyzer_obj.get("checks", []):
+                compact_lines.append(f"{c['name']}::{c['status']}")
+            analyzer_output = "\n" + "\n".join(compact_lines)
+        except Exception:
+            analyzer_output = analyzer_source  # fallback raw
     else:
-        if not os.path.exists(input_path):
-            print(f"Analyzer output file not found: {input_path}")
-            sys.exit(1)
-        with open(input_path, "r", encoding="utf-8", errors="ignore") as f_in:
-            analyzer_output = f_in.read()
+        analyzer_output = analyzer_source
 
     # Truncate overly large analyzer output to keep prompt manageable
     if len(analyzer_output) > MAX_ANALYZER_CHARS:
@@ -153,22 +155,19 @@ def main():
         analyzer_output = analyzer_output[:MAX_ANALYZER_CHARS] + "\n... (truncated)"
 
     if not analyzer_output.strip():
-        print("Analyzer output file is empty.")
-        sys.exit(1)
+        raise ValueError("Analyzer output empty")
 
     try:
         criteria = read_rubric()
     except FileNotFoundError:
-        print(f"Rubric file not found: {RUBRIC_PATH}")
-        sys.exit(1)
+        raise FileNotFoundError(f"Rubric file not found: {RUBRIC_PATH}")
 
     overrides = load_overrides()
 
     # Init AI client
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        print("Missing GOOGLE_API_KEY env var.")
-        sys.exit(1)
+        raise RuntimeError("Missing GOOGLE_API_KEY env var.")
     client = genai.Client(api_key=api_key)
 
     results = []
@@ -219,8 +218,7 @@ def main():
             weighted_sum += score * weight
         except Exception as e:
             if STRICT:
-                print(f"Error scoring '{cid}': {e}")
-                sys.exit(1)
+                raise RuntimeError(f"Error scoring '{cid}': {e}")
             else:
                 results.append(
                     {
@@ -268,18 +266,36 @@ def main():
             f"| {r['id']} | {r['name']} | {r['score']:.1f} | {r['weight']:.1f} | {r['justification'].replace('|','/')} | {r['source']} |"
         )
 
-    with open(OUTPUT_MD, "w", encoding="utf-8") as f_md:
-        f_md.write("\n".join(md_lines) + "\n")
-
+    md_report = "\n".join(md_lines) + "\n"
     out_json = {
         "generated_at": datetime.utcnow().isoformat() + "Z",
         "overall_score": round(overall, 2),
         "criteria": results,
         "overall_comment": overall_comment,
     }
-    with open(OUTPUT_JSON, "w", encoding="utf-8") as f_json:
-        json.dump(out_json, f_json, indent=2)
+    return md_report, out_json, _resp_cache, overall
 
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python final_scorer.py <analyzer_output_file>")
+        sys.exit(1)
+    input_path = sys.argv[1]
+    if not os.path.exists(input_path):
+        print(f"Analyzer output file not found: {input_path}")
+        sys.exit(1)
+    with open(input_path, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+    is_json = input_path.endswith(".json")
+    try:
+        md_report, out_json, cache, overall = run_final_scorer(content, is_json=is_json)
+    except Exception as e:
+        print(f"ERROR: {e}")
+        sys.exit(1)
+    with open(OUTPUT_MD, "w", encoding="utf-8") as f_md:
+        f_md.write(md_report)
+    with open(OUTPUT_JSON, "w", encoding="utf-8") as f_js:
+        json.dump(out_json, f_js, indent=2)
     print(f"Final scoring complete. Overall: {overall:.2f}")
     print(f"Markdown: {OUTPUT_MD} | JSON: {OUTPUT_JSON}")
 
