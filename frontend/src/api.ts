@@ -14,7 +14,7 @@ export interface RunRow {
   updated_at?: string;
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000";
 
 async function jsonFetch<T>(url: string, opts: RequestInit = {}): Promise<T> {
   const r = await fetch(url, {
@@ -41,4 +41,8 @@ export async function enqueueRun(id: number) {
 
 export async function getRun(id: number) {
   return jsonFetch<RunRow>(`${API_BASE}/runs/${id}`);
+}
+
+export async function listRuns(limit = 100) {
+  return jsonFetch<RunRow[]>(`${API_BASE}/runs?limit=${limit}`);
 }

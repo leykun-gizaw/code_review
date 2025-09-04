@@ -1,17 +1,20 @@
 import os
 import json
 import psycopg
+from dotenv import load_dotenv
 from contextlib import contextmanager
 from typing import Optional, Dict, Any
+
+load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 DB_KW = dict(
-    dbname=os.getenv("POSTGRES_DB", "analysis_db"),
-    user=os.getenv("POSTGRES_USER", "analysis_user"),
-    password=os.getenv("POSTGRES_PASSWORD", "change_me"),
-    host=os.getenv("POSTGRES_HOST", "localhost"),
-    port=os.getenv("POSTGRES_PORT", "5432"),
+    dbname=os.getenv("POSTGRES_DB"),
+    user=os.getenv("POSTGRES_USER"),
+    password=os.getenv("POSTGRES_PASSWORD"),
+    host=os.getenv("POSTGRES_HOST"),
+    port=os.getenv("POSTGRES_PORT"),
 )
 
 
@@ -70,6 +73,18 @@ def get_run(run_id: int) -> Optional[Dict[str, Any]]:
             return None
         cols = [desc.name for desc in cur.description]  # type: ignore[attr-defined]
         return dict(zip(cols, row))
+
+
+def list_runs(limit: int = 100) -> list[Dict[str, Any]]:
+    """Return recent runs ordered by id desc (limited)."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, email, github_url, status, overall_score, commit_hash, branch_name, created_at, updated_at FROM analysis_runs ORDER BY id DESC LIMIT %s",
+            (limit,),
+        )
+        rows = cur.fetchall() or []
+        cols = [d.name for d in cur.description]  # type: ignore[attr-defined]
+        return [dict(zip(cols, r)) for r in rows]
 
 
 def store_analyzer_outputs(

@@ -1,0 +1,168 @@
+import { useEffect, useState } from "react";
+import { listRuns, enqueueRun, getRun, RunRow } from "../api";
+
+interface Props {
+  onSelect(id: number): void;
+}
+
+export function RunsTable({ onSelect }: Props) {
+  const [rows, setRows] = useState<RunRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [busy, setBusy] = useState<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    listRuns(200)
+      .then((data) => {
+        if (active) {
+          setRows(data);
+          setLoading(false);
+        }
+      })
+      .catch((e) => {
+        if (active) {
+          setError(e.message || "Fetch failed");
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [refreshTick]);
+
+  async function analyze(id: number) {
+    try {
+      setBusy(id);
+      await enqueueRun(id);
+      // optimistic status update
+      setRows((r) =>
+        r.map((x) =>
+          x.id === id
+            ? {
+                ...x,
+                status:
+                  x.status === "PENDING" || x.status === "ERROR"
+                    ? "RUNNING"
+                    : x.status,
+              }
+            : x
+        )
+      );
+      // poll that single row for a short time to refresh score
+      setTimeout(async () => {
+        try {
+          const updated = await getRun(id);
+          setRows((r) => r.map((x) => (x.id === id ? updated : x)));
+        } catch (_e) {}
+      }, 3000);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (loading)
+    return <div className="text-sm text-slate-500">Loading runs…</div>;
+  if (error) return <div className="text-sm text-red-600">Error: {error}</div>;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between items-center">
+        <h2 className="text-base font-semibold">Runs</h2>
+        <button
+          onClick={() => setRefreshTick((t) => t + 1)}
+          className="text-sm px-3 py-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-50"
+        >
+          Refresh
+        </button>
+      </div>
+      <div className="overflow-x-auto border border-slate-200 rounded-md bg-white">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-slate-600">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium">ID</th>
+              <th className="px-3 py-2 text-left font-medium">Email</th>
+              <th className="px-3 py-2 text-left font-medium">Repository</th>
+              <th className="px-3 py-2 text-left font-medium">Status</th>
+              <th className="px-3 py-2 text-left font-medium">Score</th>
+              <th className="px-3 py-2 text-left font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr
+                key={r.id}
+                className="border-t border-slate-100 hover:bg-slate-50"
+              >
+                <td className="px-3 py-2 font-medium text-slate-800">
+                  <button
+                    onClick={() => onSelect(r.id)}
+                    className="underline decoration-dotted"
+                  >
+                    {r.id}
+                  </button>
+                </td>
+                <td className="px-3 py-2">{r.email}</td>
+                <td className="px-3 py-2 max-w-[220px] truncate">
+                  {r.github_url}
+                </td>
+                <td className="px-3 py-2">{statusBadge(r.status)}</td>
+                <td className="px-3 py-2">
+                  {r.overall_score != null ? r.overall_score.toFixed(2) : "—"}
+                </td>
+                <td className="px-3 py-2 space-x-2">
+                  {(r.status === "PENDING" || r.status === "ERROR") && (
+                    <button
+                      disabled={busy === r.id}
+                      onClick={() => analyze(r.id)}
+                      className="px-2 py-1 rounded bg-blue-600 text-white text-xs font-semibold disabled:opacity-50"
+                    >
+                      {busy === r.id ? "…" : "Analyze"}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => onSelect(r.id)}
+                    className="px-2 py-1 rounded border border-slate-300 text-xs"
+                  >
+                    View
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="px-3 py-6 text-center text-slate-500"
+                >
+                  No runs yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function statusBadge(status: string) {
+  const map: Record<string, string> = {
+    PENDING: "bg-slate-400",
+    RUNNING: "bg-blue-500",
+    ANALYZED: "bg-purple-500",
+    DONE: "bg-green-600",
+    ERROR: "bg-red-600",
+  };
+  return (
+    <span
+      className={`inline-block px-2 py-0.5 rounded text-white text-xs font-semibold ${
+        map[status] || "bg-slate-500"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}

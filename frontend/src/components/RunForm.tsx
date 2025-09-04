@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createRun, enqueueRun } from "../api";
+import { createRun } from "../api";
 
 interface Props {
   onCreated(id: number): void;
@@ -22,7 +22,6 @@ export function RunForm({ onCreated }: Props) {
       setLoading(true);
       const { id } = await createRun(email, repo);
       onCreated(id);
-      await enqueueRun(id);
     } catch (err: any) {
       setError(err.message || "Failed");
     } finally {

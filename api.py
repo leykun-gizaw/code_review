@@ -9,14 +9,17 @@ from persistence_single import (
     init_db,
     create_run,
     get_run,
+    list_runs,
     store_analyzer_outputs,
     store_scorer_outputs,
     update_run_metadata,
 )
 from analyzer import run_analyzer, ANALYZER_TOOL_VERSION
 from final_scorer import run_final_scorer, SCORER_TOOL_VERSION
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "*"}})
 JOB_QUEUE: "queue.Queue[int]" = queue.Queue()
 
 WORKER_STARTED = False
@@ -78,6 +81,7 @@ def worker_loop():
                     )
             update_run_metadata(run_id, status="DONE")
         except Exception as e:
+            print(str(e))
             update_run_metadata(run_id, status="ERROR", scorer_tool_version=str(e))
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
@@ -101,6 +105,16 @@ def create_run_endpoint():
         return jsonify({"error": "email and github_url required"}), 400
     run_id = create_run(email, github_url)
     return jsonify({"id": run_id, "status": "PENDING"}), 201
+
+
+@app.route("/runs", methods=["GET"])
+def list_runs_endpoint():
+    try:
+        limit = int(request.args.get("limit", "100"))
+    except ValueError:
+        limit = 100
+    data = list_runs(limit=limit)
+    return jsonify(data)
 
 
 @app.route("/runs/<int:run_id>", methods=["GET"])
