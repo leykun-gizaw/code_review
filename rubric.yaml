@@ -1,0 +1,124 @@
+checks:
+  # --- SECTION 1: PROJECT SETUP & DOCUMENTATION ---
+  - name: "S1.1: A comprehensive README.md is present"
+    type: "ai_check"
+    files_to_analyze: ["README.md"]
+    prompt: >
+      You are a technical writing expert reviewing a project's README.md file.
+      The README must be comprehensive and clear for a new developer.
+      Evaluate it based on the following criteria:
+      1.  **Project Title & Description:** Is there a clear title and a concise summary of what the project does?
+      2.  **Installation Guide:** Are there step-by-step instructions on how to set up the project locally (e.g., clone repo, create virtual environment, install dependencies)?
+      3.  **Usage Instructions:** Is it explained how to run the application (e.g., `python manage.py runserver`) and how to use its features?
+      4.  **Tech Stack:** Does it mention the key technologies used (e.g., Django, Python, PostgreSQL)?
+      
+      CONTEXT (README.md):
+      ---
+      {context}
+      ---
+
+      Does the README meet the criteria for being comprehensive and clear?
+      Your final answer must start with a single word: PASS or FAIL, followed by a detailed justification of what is missing or well-executed.
+
+  - name: "S1.2: Project dependencies are properly managed"
+    type: "file_exists"
+    # This check can accept a list of possible paths
+    paths: ["requirements.txt", "Pipfile", "pyproject.toml"]
+
+  - name: "S1.3: Sensitive files and virtual environments are ignored"
+    type: "file_exists"
+    path: ".gitignore"
+
+  # --- SECTION 2: CODE QUALITY & BEST PRACTICES ---
+  - name: "S2.1: Code is clean, readable, and well-structured"
+    type: "ai_check"
+    # Analyze the most important files in a Django project
+    files_to_analyze: ["views.py", "models.py", "serializers.py", "forms.py"]
+    prompt: >
+      You are a senior Python/Django developer reviewing code for quality.
+      Analyze the provided code from `{file_path}` based on these criteria:
+      1.  **Readability:** Are variable and function names descriptive (e.g., `get_active_users()` instead of `getData()`)?
+      2.  **Simplicity:** Is the code overly complex? Are functions short and focused on a single responsibility?
+      3.  **Comments:** Are there comments where necessary to explain complex logic, but not so many that they clutter the code?
+      4.  **DRY Principle (Don't Repeat Yourself):** Is there significant code duplication that could be refactored into a reusable function or class?
+
+      CONTEXT:
+      ---
+      {context}
+      ---
+      
+      Is the code quality high? Your final answer must start with PASS or FAIL, with a justification pointing out specific examples of good or bad practices.
+
+  - name: "S2.2: Basic security practices are followed"
+    type: "ai_check"
+    files_to_analyze: ["settings.py", "views.py"]
+    prompt: >
+      You are a security auditor specializing in Django.
+      Review the code from `{file_path}` for common security vulnerabilities:
+      1.  **Hardcoded Secrets:** Are there any secret keys, passwords, or API keys directly in the code? They should be loaded from environment variables.
+      2.  **Debug Mode:** In `settings.py`, is `DEBUG` set to `True`? If so, warn that this should never be the case in production.
+      3.  **SQL Injection:** If raw SQL is used, does it appear to be parameterized correctly to prevent SQL injection? (Look for `cursor.execute("SELECT ... %s", [param])`).
+      
+      CONTEXT:
+      ---
+      {context}
+      ---
+
+      Does the code exhibit any obvious security flaws? Your final answer must start with PASS or FAIL, and you must list any potential vulnerabilities you find.
+
+  # --- SECTION 3: VERSION CONTROL (GIT) ---
+  - name: "S3.1: Sufficient commit history exists"
+    type: "git_commit_count"
+    min_commits: 5
+
+  - name: "S3.2: Git commit messages are meaningful and follow conventions"
+    type: "ai_check"
+    context_source: "git_log"
+    prompt: >
+      You are a Git expert evaluating a repository's commit history.
+      A good commit history tells a story. Evaluate the git log based on these criteria:
+      1.  **Message Quality:** Are the messages descriptive and in the imperative mood (e.g., "Add user authentication" not "added stuff")?
+      2.  **Conventional Commits:** Do the messages follow a convention like `feat:`, `fix:`, `docs:`, `refactor:`? This is a strong positive sign.
+      3.  **Atomicity:** Does it look like commits are small and logical, or are there huge, unrelated changes in single commits?
+
+      CONTEXT (GIT LOG):
+      ---
+      {context}
+      ---
+
+      Is the Git history clean and professional? Your final answer must start with PASS or FAIL, followed by a justification.
+
+  # --- SECTION 4: DJANGO-SPECIFIC BEST PRACTICES ---
+  - name: "S4.1: Follows 'Fat Models, Skinny Views' philosophy"
+    type: "ai_check"
+    files_to_analyze: ["models.py", "views.py"]
+    prompt: >
+      You are a Django expert evaluating project structure based on the "Fat Models, Skinny Views" principle.
+      The goal is to keep business logic within the model layer (`models.py`) and keep the view layer (`views.py`) thin and focused on handling HTTP requests/responses.
+      
+      Review the code in `models.py` and `views.py`.
+      -   Does `models.py` contain custom methods that encapsulate business logic (e.g., `user.is_premium()`, `order.calculate_total()`)?
+      -   Are the functions or classes in `views.py` cluttered with complex business logic that should be on the model instead?
+      
+      CONTEXT (MODELS.PY and VIEWS.PY):
+      ---
+      {context}
+      ---
+      
+      Does the project adhere to the 'Fat Models, Skinny Views' principle? Your final answer must be PASS or FAIL with a clear explanation.
+
+  - name: "S4.2: URL patterns are named and well-structured"
+    type: "ai_check"
+    files_to_analyze: ["urls.py"]
+    prompt: >
+      You are a Django developer reviewing `urls.py`.
+      A best practice is to name every URL pattern using the `name` keyword argument. This makes them easy to reference from templates and views.
+      
+      Review the `urlpatterns` list in the provided `urls.py` file. Does every `path()` or `re_path()` call include a `name='...'` argument?
+      
+      CONTEXT (URLS.PY):
+      ---
+      {context}
+      ---
+
+      Are all URL patterns properly named? Your final answer must be PASS or FAIL. If FAIL, list the line numbers of the unnamed paths.
