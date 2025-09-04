@@ -1,8 +1,14 @@
 checks:
+  # Global Notes:
+  # - Each ai_check may define: per_file_char_limit, total_context_char_limit, git_log_depth
+  # - Keep limits modest to reduce token usage and rate limiting.
+
   # --- SECTION 1: PROJECT SETUP & DOCUMENTATION ---
   - name: "S1.1: A comprehensive README.md is present"
     type: "ai_check"
     files_to_analyze: ["README.md"]
+    per_file_char_limit: 6000
+    total_context_char_limit: 6000
     prompt: >
       You are a technical writing expert reviewing a project's README.md file.
       The README must be comprehensive and clear for a new developer.
@@ -22,7 +28,6 @@ checks:
 
   - name: "S1.2: Project dependencies are properly managed"
     type: "file_exists"
-    # This check can accept a list of possible paths
     paths: ["requirements.txt", "Pipfile", "pyproject.toml"]
 
   - name: "S1.3: Sensitive files and virtual environments are ignored"
@@ -32,8 +37,9 @@ checks:
   # --- SECTION 2: CODE QUALITY & BEST PRACTICES ---
   - name: "S2.1: Code is clean, readable, and well-structured"
     type: "ai_check"
-    # Analyze the most important files in a Django project
     files_to_analyze: ["views.py", "models.py", "serializers.py", "forms.py"]
+    per_file_char_limit: 5000
+    total_context_char_limit: 18000
     prompt: >
       You are a senior Python/Django developer reviewing code for quality.
       Analyze the provided code from `{file_path}` based on these criteria:
@@ -52,6 +58,8 @@ checks:
   - name: "S2.2: Basic security practices are followed"
     type: "ai_check"
     files_to_analyze: ["settings.py", "views.py"]
+    per_file_char_limit: 5000
+    total_context_char_limit: 10000
     prompt: >
       You are a security auditor specializing in Django.
       Review the code from `{file_path}` for common security vulnerabilities:
@@ -66,6 +74,25 @@ checks:
 
       Does the code exhibit any obvious security flaws? Your final answer must start with PASS or FAIL, and you must list any potential vulnerabilities you find.
 
+  - name: "S2.3: Functions and views are not excessively complex"
+    type: "ai_check"
+    files_to_analyze: ["views.py", "models.py"]
+    per_file_char_limit: 5000
+    total_context_char_limit: 9000
+    prompt: >
+      You are a Python code reviewer focused on cyclomatic and structural complexity.
+      Review the provided code and flag any functions or methods that likely exceed reasonable complexity (e.g., >15 branches, deeply nested conditionals, very long functions >60 lines).
+      Provide:
+      -  List of top 5 most complex functions: name, file, rough line span, reason.
+      -  Any obvious refactoring opportunities (extract method, early return, model method move, serializer validation extraction, etc.).
+
+      CONTEXT:
+      ---
+      {context}
+      ---
+
+      If no problematic functions are found say PASS with a short justification. Otherwise start with FAIL and list findings.
+
   # --- SECTION 3: VERSION CONTROL (GIT) ---
   - name: "S3.1: Sufficient commit history exists"
     type: "git_commit_count"
@@ -74,6 +101,7 @@ checks:
   - name: "S3.2: Git commit messages are meaningful and follow conventions"
     type: "ai_check"
     context_source: "git_log"
+    git_log_depth: 40
     prompt: >
       You are a Git expert evaluating a repository's commit history.
       A good commit history tells a story. Evaluate the git log based on these criteria:
@@ -92,6 +120,8 @@ checks:
   - name: "S4.1: Follows 'Fat Models, Skinny Views' philosophy"
     type: "ai_check"
     files_to_analyze: ["models.py", "views.py"]
+    per_file_char_limit: 6000
+    total_context_char_limit: 11000
     prompt: >
       You are a Django expert evaluating project structure based on the "Fat Models, Skinny Views" principle.
       The goal is to keep business logic within the model layer (`models.py`) and keep the view layer (`views.py`) thin and focused on handling HTTP requests/responses.
@@ -110,6 +140,8 @@ checks:
   - name: "S4.2: URL patterns are named and well-structured"
     type: "ai_check"
     files_to_analyze: ["urls.py"]
+    per_file_char_limit: 4000
+    total_context_char_limit: 4000
     prompt: >
       You are a Django developer reviewing `urls.py`.
       A best practice is to name every URL pattern using the `name` keyword argument. This makes them easy to reference from templates and views.
@@ -122,3 +154,36 @@ checks:
       ---
 
       Are all URL patterns properly named? Your final answer must be PASS or FAIL. If FAIL, list the line numbers of the unnamed paths.
+
+  # --- SECTION 5: TESTING & ENV / DEPLOYMENT ---
+  - name: "S5.1: Tests folder exists"
+    type: "file_exists"
+    paths: ["tests", "tests.py", "accounts/tests.py", "recipes/tests.py"]
+
+  - name: "S5.2: Example environment file present"
+    type: "file_exists"
+    paths: [".env.example", "example.env", "env.sample"]
+
+  - name: "S5.3: License file present"
+    type: "file_exists"
+    paths: ["LICENSE", "LICENSE.md"]
+
+  - name: "S5.4: Settings use environment variables for secrets"
+    type: "ai_check"
+    files_to_analyze: ["settings.py"]
+    per_file_char_limit: 6000
+    total_context_char_limit: 6000
+    prompt: >
+      You are auditing Django settings for proper environment-based configuration.
+      Check that:
+      - SECRET_KEY is not hard-coded (should reference env var, e.g., os.getenv or environ module).
+      - DATABASE credentials (ENGINE/NAME/USER/PASSWORD/HOST) are not plainly embedded.
+      - DEBUG defaults to False (or at least is env-controlled) in production context.
+      - ALLOWED_HOSTS is not wide open with '*'.
+
+      CONTEXT (settings.py):
+      ---
+      {context}
+      ---
+
+      Start with PASS if all are acceptable, otherwise FAIL and list issues succinctly.
