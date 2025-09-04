@@ -2,3 +2,8 @@
 repos/
 .venv_gemini/
 .ai_cache.json
+analysis_report.json
+analysis_report.md
+final_scores.json
+final_scores.md
+.final_score_cache.json

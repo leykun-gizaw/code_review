@@ -1,0 +1,97 @@
+# Secondary scoring rubric for post-analysis grading
+# Each criterion is scored 0.0–1.0 in 0.1 increments.
+# The AI model receives the full stdout of analyzer.py as {analyzer_output}.
+# It must respond with two lines:
+#   SCORE: <value>
+#   JUSTIFICATION: <short reasoning>
+# If evidence is insufficient, it should choose a conservative score (<=0.5) and state uncertainty.
+
+criteria:
+  - id: features
+    name: "Features work as intended"
+    weight: 1
+    prompt: |
+      You are grading whether the application's main features appear to work.
+      Use ONLY the provided analyzer output. Do not invent behavior.
+      Heuristics you may use:
+        - PASS counts and which checks passed (quality, structure, etc.) imply likelihood features run.
+        - Presence of security / structural passes suggests app runs at least minimally.
+      If there is no direct runtime evidence, give at most 0.6 unless multiple quality indicators strongly suggest completeness.
+      SCORE SCALE (choose exactly one): 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0
+      Return strictly:
+      SCORE: <value>\nJUSTIFICATION: <concise reason>
+
+  - id: code_quality
+    name: "Code is clean, readable and well structured"
+    weight: 1
+    prompt: |
+      Evaluate code cleanliness and structure from analyzer output.
+      Use signals from checks like "Code is clean" or complexity/fat-models results.
+      High clarity + low duplication + good layering => ≥0.8.
+      Mixed or partial PASS => 0.4–0.7. FAIL => 0.0–0.3.
+      Allowed values: 0.0..1.0 step 0.1.
+      Output format:
+      SCORE: <value>\nJUSTIFICATION: <reason>
+
+  - id: git_usage
+    name: "Git has properly been used"
+    weight: 1
+    prompt: |
+      Judge proper Git usage (branching implied by history style, meaningful commit messages) using analyzer output, especially Git checks.
+      Good conventional, atomic messages => ≥0.8. Some issues but usable => 0.4–0.7. Poor / failing => ≤0.3.
+      Allowed values: 0.0..1.0 step 0.1.
+      SCORE: <value>\nJUSTIFICATION: <reason>
+
+  - id: commit_history
+    name: "Proper commit history (not one big commit)"
+    weight: 1
+    prompt: |
+      Focus ONLY on commit granularity and quantity signaled by analyzer output.
+      If minimum commits passed and messages suggest multiple logical units => higher score.
+      If borderline or large squashed changes noted => mid or low.
+      Allowed values: 0.0..1.0 step 0.1.
+      SCORE: <value>\nJUSTIFICATION: <reason>
+
+  - id: invalid_inputs
+    name: "Handles invalid inputs gracefully"
+    weight: 1
+    prompt: |
+      Infer resilience to invalid inputs indirectly from quality/security results.
+      If no evidence, choose ≤0.5 unless explicit robustness is described.
+      Evidence includes: validation layers, serializers, permission checks.
+      Allowed values: 0.0..1.0 step 0.1.
+      SCORE: <value>\nJUSTIFICATION: <reason>
+
+  - id: error_messages
+    name: "Meaningful error messages instead of crashing"
+    weight: 1
+    prompt: |
+      Use analyzer output to infer presence of structured error handling (e.g., DRF responses, validation errors) and absence of crash indicators.
+      Lacking direct evidence -> ≤0.6. Strong indicators (robust view/serializer patterns) => ≥0.7.
+      Allowed values: 0.0..1.0 step 0.1.
+      SCORE: <value>\nJUSTIFICATION: <reason>
+
+  - id: readme_detail
+    name: "Well detailed README provided"
+    weight: 1
+    prompt: |
+      Base score on README-related check outcome and reasoning.
+      If README FAILED with multiple missing sections => ≤0.4.
+      If mostly complete but some gaps => 0.5–0.8.
+      Comprehensive => 0.9 or 1.0.
+      Allowed values: 0.0..1.0 step 0.1.
+      SCORE: <value>\nJUSTIFICATION: <reason>
+
+  - id: backend_docs
+    name: "Backend documentation provided (API / endpoints)"
+    weight: 1
+    prompt: |
+      Infer API/backend documentation quality from README analysis and code structure comments.
+      If no explicit API usage or endpoint documentation referenced => ≤0.4.
+      Some mention but incomplete => 0.5–0.7.
+      Clear endpoint descriptions or usage examples => 0.8–1.0.
+      Allowed values: 0.0..1.0 step 0.1.
+      SCORE: <value>\nJUSTIFICATION: <reason>
+
+# Optional: manual overrides (create a JSON file with id->score to replace AI results)
+# Not used by default; script will look for final_score_overrides.json if present.
