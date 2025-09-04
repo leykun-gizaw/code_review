@@ -127,7 +127,7 @@ def safe_ai_call(client, model: str, prompt: str):
             raise
 
 
-def run_final_scorer(analyzer_source: str, is_json: bool = False):
+def run_final_scorer(analyzer_source, is_json: bool = False):
     """Run scorer programmatically.
 
     analyzer_source: markdown text OR JSON string from analyzer.
@@ -135,16 +135,39 @@ def run_final_scorer(analyzer_source: str, is_json: bool = False):
     Returns (md_report_str, json_obj, ai_cache_dict, overall_score)
     """
     if is_json:
-        try:
-            analyzer_obj = json.loads(analyzer_source)
+        analyzer_obj = None
+        # Accept already-parsed dict/list or JSON string
+        if isinstance(analyzer_source, (dict, list)):
+            analyzer_obj = analyzer_source
+        else:
+            try:
+                analyzer_obj = json.loads(analyzer_source)
+            except Exception:
+                analyzer_obj = None
+        if isinstance(analyzer_obj, dict):
             compact_lines = []
             for c in analyzer_obj.get("checks", []):
-                compact_lines.append(f"{c['name']}::{c['status']}")
+                try:
+                    name = c.get("name") if isinstance(c, dict) else None
+                    status = c.get("status") if isinstance(c, dict) else None
+                    if name and status:
+                        compact_lines.append(f"{name}::{status}")
+                except Exception:
+                    continue
             analyzer_output = "\n" + "\n".join(compact_lines)
-        except Exception:
-            analyzer_output = analyzer_source  # fallback raw
+        else:
+            # Fallback: ensure string form
+            analyzer_output = (
+                analyzer_source
+                if isinstance(analyzer_source, str)
+                else json.dumps(analyzer_source, default=str)
+            )
     else:
-        analyzer_output = analyzer_source
+        analyzer_output = (
+            analyzer_source
+            if isinstance(analyzer_source, str)
+            else json.dumps(analyzer_source, default=str)
+        )
 
     # Truncate overly large analyzer output to keep prompt manageable
     if len(analyzer_output) > MAX_ANALYZER_CHARS:
@@ -154,6 +177,8 @@ def run_final_scorer(analyzer_source: str, is_json: bool = False):
             )
         analyzer_output = analyzer_output[:MAX_ANALYZER_CHARS] + "\n... (truncated)"
 
+    if not isinstance(analyzer_output, str):  # ultimate guard
+        analyzer_output = str(analyzer_output)
     if not analyzer_output.strip():
         raise ValueError("Analyzer output empty")
 

@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+// GitHub-flavored markdown (tables, strikethrough, task lists)
+import remarkGfm from "remark-gfm";
 import { getRun, enqueueRun, RunRow } from "../api";
 
 interface Props {
@@ -68,7 +71,7 @@ export function RunViewer({ id }: Props) {
           )}
           {data.branch_name && <Meta label="Branch" value={data.branch_name} />}
           {data.overall_score != null && (
-            <Meta label="Overall Score" value={data.overall_score.toFixed(2)} />
+            <Meta label="Overall Score" value={data.overall_score} />
           )}
           {(data.status === "PENDING" || data.status === "ERROR") && (
             <button
@@ -145,16 +148,91 @@ function MarkdownBlock({
   content: any;
   emptyLabel: string;
 }) {
-  if (!content)
+  if (!content) {
     return (
       <div className="p-4 border border-dashed border-slate-300 rounded-md text-sm text-slate-500">
         {emptyLabel}
       </div>
     );
+  }
   return (
-    <pre className="p-4 border border-slate-200 bg-white rounded-md overflow-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-slate-800 max-h-[480px]">
-      {content}
-    </pre>
+    <div className="p-4 border border-slate-200 bg-white rounded-md overflow-auto text-sm leading-relaxed text-slate-800 max-h-[540px] markdown-content">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ node, inline: _inline, className, children, ..._props }: any) {
+            const isInline = _inline as boolean;
+            const lang = /language-/.test(className || "")
+              ? className
+              : undefined;
+            if (isInline) {
+              return (
+                <code className="px-1 py-0.5 rounded bg-slate-100 text-[0.85em]">
+                  {children}
+                </code>
+              );
+            }
+            return (
+              <pre className="bg-slate-900 text-slate-100 p-3 rounded-md overflow-auto text-xs mb-3">
+                <code className={lang}>{children}</code>
+              </pre>
+            );
+          },
+          h1: ({ children, ...p }) => (
+            <h1 className="text-xl font-semibold mt-2 mb-3" {...p}>
+              {children}
+            </h1>
+          ),
+          h2: ({ children, ...p }) => (
+            <h2 className="text-lg font-semibold mt-4 mb-2" {...p}>
+              {children}
+            </h2>
+          ),
+          h3: ({ children, ...p }) => (
+            <h3 className="text-base font-semibold mt-4 mb-2" {...p}>
+              {children}
+            </h3>
+          ),
+          ul: ({ children, ...p }) => (
+            <ul className="list-disc ml-5 mb-3 space-y-1" {...p}>
+              {children}
+            </ul>
+          ),
+          ol: ({ children, ...p }) => (
+            <ol className="list-decimal ml-5 mb-3 space-y-1" {...p}>
+              {children}
+            </ol>
+          ),
+          p: ({ children, ...p }) => (
+            <p className="mb-3" {...p}>
+              {children}
+            </p>
+          ),
+          table: ({ children, ...p }) => (
+            <table className="mb-4 border border-slate-300 text-sm" {...p}>
+              {children}
+            </table>
+          ),
+          thead: ({ children, ...p }) => (
+            <thead className="bg-slate-100" {...p}>
+              {children}
+            </thead>
+          ),
+          th: ({ children, ...p }) => (
+            <th className="border border-slate-300 px-2 py-1 text-left" {...p}>
+              {children}
+            </th>
+          ),
+          td: ({ children, ...p }) => (
+            <td className="border border-slate-300 px-2 py-1 align-top" {...p}>
+              {children}
+            </td>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   );
 }
 
@@ -193,7 +271,7 @@ function renderSummaryTable(row: RunRow) {
     {
       key: "Overall Score",
       present: row.overall_score != null,
-      note: row.overall_score != null ? row.overall_score.toFixed(2) : "—",
+      note: row.overall_score != null ? row.overall_score : "—",
     },
   ];
   return (

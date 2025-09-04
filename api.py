@@ -4,6 +4,9 @@ import queue
 import tempfile
 import subprocess
 import shutil
+import logging
+import traceback
+from datetime import datetime
 from flask import Flask, request, jsonify
 from persistence_single import (
     init_db,
@@ -20,6 +23,43 @@ from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
+
+# --- Logging Configuration ----------------------------------------------------
+ERROR_LOG_PATH = os.getenv("ERROR_LOG_PATH", "error.log")
+_log_dir = os.path.dirname(ERROR_LOG_PATH)
+if _log_dir and not os.path.exists(_log_dir):
+    try:
+        os.makedirs(_log_dir, exist_ok=True)
+    except Exception:
+        # fallback to current directory if directory creation fails
+        ERROR_LOG_PATH = "error.log"
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logger = logging.getLogger("api")
+logger.setLevel(LOG_LEVEL)
+
+# Avoid duplicate handlers if module reloaded
+if not any(
+    isinstance(h, logging.FileHandler)
+    and getattr(h, "baseFilename", "") == os.path.abspath(ERROR_LOG_PATH)
+    for h in logger.handlers
+):
+    file_handler = logging.FileHandler(ERROR_LOG_PATH, encoding="utf-8")
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    )
+    logger.addHandler(file_handler)
+
+if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    )
+    logger.addHandler(stream_handler)
+
+logger.info(
+    f"Using error log file: {os.path.abspath(ERROR_LOG_PATH)} (level={LOG_LEVEL})"
+)
 JOB_QUEUE: "queue.Queue[int]" = queue.Queue()
 
 WORKER_STARTED = False
@@ -81,8 +121,18 @@ def worker_loop():
                     )
             update_run_metadata(run_id, status="DONE")
         except Exception as e:
-            print(str(e))
-            update_run_metadata(run_id, status="ERROR", scorer_tool_version=str(e))
+            tb = traceback.format_exc(limit=20)
+            msg = f"Worker failure run_id={run_id} repo={repo_url} error={e}\n{tb}"
+            logger.error(msg)
+            # Fallback direct append in case handlers failed
+            try:
+                with open(ERROR_LOG_PATH, "a", encoding="utf-8") as _ef:
+                    _ef.write(f"{datetime.utcnow().isoformat()}Z {msg}\n")
+            except Exception:
+                pass
+            update_run_metadata(
+                run_id, status="ERROR", scorer_tool_version=str(e)[:240]
+            )
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
         JOB_QUEUE.task_done()

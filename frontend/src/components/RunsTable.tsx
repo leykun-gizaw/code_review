@@ -110,7 +110,7 @@ export function RunsTable({ onSelect }: Props) {
                 </td>
                 <td className="px-3 py-2">{statusBadge(r.status)}</td>
                 <td className="px-3 py-2">
-                  {r.overall_score != null ? r.overall_score.toFixed(2) : "—"}
+                  {r.overall_score != null ? r.overall_score : "—"}
                 </td>
                 <td className="px-3 py-2 space-x-2">
                   {(r.status === "PENDING" || r.status === "ERROR") && (
