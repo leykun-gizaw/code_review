@@ -47,45 +47,10 @@ export function RunViewer({ id }: Props) {
     );
 
   return (
-    <div className="grid gap-6 md:grid-cols-4">
-      <div className="md:col-span-1 space-y-3">
-        <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm">
-          <h2 className="text-base font-semibold mb-2">Run #{data.id}</h2>
-          <Meta label="Status" value={<StatusBadge status={data.status} />} />
-          <Meta label="Email" value={data.email} />
-          <Meta
-            label="Repository"
-            value={
-              <a
-                className="text-blue-600 underline"
-                href={data.github_url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Open Repo
-              </a>
-            }
-          />
-          {data.commit_hash && (
-            <Meta label="Commit" value={data.commit_hash.slice(0, 10)} />
-          )}
-          {data.branch_name && <Meta label="Branch" value={data.branch_name} />}
-          {data.overall_score != null && (
-            <Meta label="Overall Score" value={data.overall_score} />
-          )}
-          {(data.status === "PENDING" || data.status === "ERROR") && (
-            <button
-              onClick={() => enqueueRun(id)}
-              className="mt-3 w-full inline-flex justify-center items-center rounded-md bg-blue-600 text-white px-3 py-2 text-sm font-medium hover:bg-blue-500"
-            >
-              Enqueue
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="md:col-span-3 space-y-4">
-        <div>
-          <div className="flex border-b border-slate-200 mb-4 gap-4 text-sm">
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex flex-col h-full min-h-0">
+        <div className="flex flex-col flex-1 min-h-0">
+          <div className="flex border-b border-slate-200 mb-4 gap-4 text-sm shrink-0">
             <button
               onClick={() => setTab("analyzer")}
               className={`pb-2 -mb-px border-b-2 ${
@@ -107,23 +72,67 @@ export function RunViewer({ id }: Props) {
               Scorer
             </button>
           </div>
-          {tab === "analyzer" ? (
-            <MarkdownBlock
-              content={data.analyzer_md}
-              emptyLabel="Analyzer output not ready yet."
-            />
-          ) : (
-            <MarkdownBlock
-              content={data.final_scorer_md}
-              emptyLabel="Scorer output not ready yet."
-            />
-          )}
+          <div className="flex-1 min-h-0">
+            {tab === "analyzer" ? (
+              <MarkdownBlock
+                content={data.analyzer_md}
+                emptyLabel="Analyzer output not ready yet."
+              />
+            ) : (
+              <MarkdownBlock
+                content={data.final_scorer_md}
+                emptyLabel="Scorer output not ready yet."
+              />
+            )}
+          </div>
         </div>
-        <div>
-          <h3 className="text-sm font-semibold tracking-wide uppercase text-slate-600 mb-2">
-            Summary Table
-          </h3>
-          {renderSummaryTable(data)}
+        <div className="mt-4 shrink-0">
+          <div className="flex flex-col md:flex-row gap-4 items-start">
+            <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm w-full md:w-64 flex-shrink-0">
+              <h2 className="text-base font-semibold mb-2">Run #{data.id}</h2>
+              <Meta
+                label="Status"
+                value={<StatusBadge status={data.status} />}
+              />
+              <Meta label="Email" value={data.email} />
+              <Meta
+                label="Repository"
+                value={
+                  <a
+                    className="text-blue-600 underline"
+                    href={data.github_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open Repo
+                  </a>
+                }
+              />
+              {data.commit_hash && (
+                <Meta label="Commit" value={data.commit_hash.slice(0, 10)} />
+              )}
+              {data.branch_name && (
+                <Meta label="Branch" value={data.branch_name} />
+              )}
+              {data.overall_score != null && (
+                <Meta label="Overall Score" value={data.overall_score} />
+              )}
+              {(data.status === "PENDING" || data.status === "ERROR") && (
+                <button
+                  onClick={() => enqueueRun(id)}
+                  className="mt-3 w-full inline-flex justify-center items-center rounded-md bg-blue-600 text-white px-3 py-2 text-sm font-medium hover:bg-blue-500"
+                >
+                  Enqueue
+                </button>
+              )}
+            </div>
+            <div className="w-full flex flex-col justify-between overflow-x-auto">
+              <h3 className="text-lg font-semibold tracking-wide uppercase text-slate-600 mb-2">
+                Summary
+              </h3>
+              {renderSummaryTable(data)}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -156,7 +165,7 @@ function MarkdownBlock({
     );
   }
   return (
-    <div className="p-4 border border-slate-200 bg-white rounded-md overflow-auto text-sm leading-relaxed text-slate-800 max-h-[540px] markdown-content">
+    <div className="p-4 border border-slate-200 bg-white h-full rounded-md overflow-auto text-sm leading-relaxed text-slate-800 markdown-content">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
