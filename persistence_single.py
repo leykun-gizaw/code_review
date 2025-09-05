@@ -79,7 +79,7 @@ def list_runs(limit: int = 100) -> list[Dict[str, Any]]:
     """Return recent runs ordered by id desc (limited)."""
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT id, email, github_url, status, overall_score, commit_hash, branch_name, created_at, updated_at FROM analysis_runs ORDER BY id DESC LIMIT %s",
+            "SELECT id, email, github_url, status, overall_score, commit_hash, branch_name, api_key_label, created_at, updated_at FROM analysis_runs ORDER BY id DESC LIMIT %s",
             (limit,),
         )
         rows = cur.fetchall() or []

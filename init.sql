@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS analysis_runs (
     -- cached AI raw responses
     analyzer_ai_cache JSONB,
     scorer_ai_cache JSONB,
+    api_key_label TEXT,
     status TEXT NOT NULL DEFAULT 'PENDING', -- PENDING | RUNNING | DONE | ERROR
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

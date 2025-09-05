@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { listRuns, enqueueRun, getRun, RunRow } from "../api";
 
 interface Props {
@@ -11,6 +11,7 @@ export function RunsTable({ onSelect }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [busy, setBusy] = useState<number | null>(null);
+  const autoSelected = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -20,6 +21,11 @@ export function RunsTable({ onSelect }: Props) {
         if (active) {
           setRows(data);
           setLoading(false);
+          // Auto-select the newest (list assumed sorted desc by created_at/id) once
+          if (!autoSelected.current && data.length > 0) {
+            onSelect(data[0].id);
+            autoSelected.current = true;
+          }
         }
       })
       .catch((e) => {
@@ -106,7 +112,14 @@ export function RunsTable({ onSelect }: Props) {
                 </td>
                 <td className="px-3 py-2">{r.email}</td>
                 <td className="px-3 py-2 max-w-[220px] truncate">
-                  {r.github_url}
+                  <a
+                    href={r.github_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:text-blue-700 underline"
+                  >
+                    Repo Link
+                  </a>
                 </td>
                 <td className="px-3 py-2">{statusBadge(r.status)}</td>
                 <td className="px-3 py-2">
