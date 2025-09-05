@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import Optional
 import yaml
 import json
 import re
@@ -127,7 +128,12 @@ def safe_ai_call(client, model: str, prompt: str):
             raise
 
 
-def run_final_scorer(analyzer_source, is_json: bool = False):
+def run_final_scorer(
+    analyzer_source,
+    is_json: bool = False,
+    api_key: Optional[str] = None,
+    model_override: Optional[str] = None,
+):
     """Run scorer programmatically.
 
     analyzer_source: markdown text OR JSON string from analyzer.
@@ -190,10 +196,11 @@ def run_final_scorer(analyzer_source, is_json: bool = False):
     overrides = load_overrides()
 
     # Init AI client
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise RuntimeError("Missing GOOGLE_API_KEY env var.")
-    client = genai.Client(api_key=api_key)
+    ak = api_key or os.getenv("GEMINI_API_KEY")
+    if not ak:
+        raise RuntimeError("Missing API key (none passed and GEMINI_API_KEY unset).")
+    client = genai.Client(api_key=ak)
+    use_model = model_override or MODEL
 
     results = []
     total_weight = 0.0
@@ -226,7 +233,7 @@ def run_final_scorer(analyzer_source, is_json: bool = False):
         if VERBOSE:
             print(f"Scoring criterion '{cid}' ({name}) ...")
         try:
-            raw = safe_ai_call(client, MODEL, prompt)
+            raw = safe_ai_call(client, use_model, prompt)
             raw_text = str(raw) if raw is not None else ""
             score, just = parse_ai_response(raw_text)
             results.append(

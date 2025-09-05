@@ -6,6 +6,7 @@ import subprocess
 import shutil
 import logging
 import traceback
+import json
 from datetime import datetime
 from flask import Flask, request, jsonify
 from persistence_single import (
@@ -20,6 +21,7 @@ from persistence_single import (
 from analyzer import run_analyzer, ANALYZER_TOOL_VERSION
 from final_scorer import run_final_scorer, SCORER_TOOL_VERSION
 from flask_cors import CORS
+from ai_keys import get_next_key
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -83,6 +85,10 @@ def worker_loop():
         repo_url = run_row["github_url"]
         tmpdir = tempfile.mkdtemp(prefix=f"run_{run_id}_")
         try:
+            # Pick API key for this run (one key per repo run)
+            key_label, api_key = get_next_key()
+            update_run_metadata(run_id, status="RUNNING", api_key_label=key_label)
+
             clone_repo(repo_url, tmpdir)
             # capture branch + commit
             branch = subprocess.check_output(
@@ -92,33 +98,45 @@ def worker_loop():
                 ["git", "-C", tmpdir, "rev-parse", "HEAD"], text=True
             ).strip()
             # Run analyzer unless already present
+            json_obj = None
             if not run_row.get("analyzer_md"):
-                md, js, ai_cache, passed, total = run_analyzer(tmpdir)
+                md_report, json_obj, cache, total_passed, total_checks = run_analyzer(
+                    tmpdir,
+                    api_key=api_key,
+                )
                 store_analyzer_outputs(
                     run_id,
-                    md,
-                    js,
-                    ai_cache,
-                    commit_hash=commit,
-                    branch_name=branch,
-                    tool_version=ANALYZER_TOOL_VERSION,
+                    md_report,
+                    json_obj,
+                    cache,
+                    commit,
+                    branch,
+                    ANALYZER_TOOL_VERSION,
                 )
                 run_row = get_run(run_id) or run_row
+            else:
+                # Parse stored analyzer JSON so scorer invocation uniform
+                try:
+                    stored = run_row.get("analyzer_json")
+                    if stored:
+                        json_obj = json.loads(stored)
+                except Exception:
+                    json_obj = None
             # Run scorer unless already present
-            if not run_row.get("final_scorer_md"):
-                analyzer_json = run_row.get("analyzer_json")
-                if analyzer_json:
-                    md_s, js_s, ai_cache_s, overall = run_final_scorer(
-                        analyzer_json, is_json=True
-                    )
-                    store_scorer_outputs(
-                        run_id,
-                        md_s,
-                        js_s,
-                        ai_cache_s,
-                        overall_score=overall,
-                        tool_version=SCORER_TOOL_VERSION,
-                    )
+            if not run_row.get("final_scorer_md") and json_obj is not None:
+                scorer_md, scorer_json, scorer_cache, overall = run_final_scorer(
+                    json_obj,
+                    is_json=True,
+                    api_key=api_key,
+                )
+                store_scorer_outputs(
+                    run_id,
+                    scorer_md,
+                    scorer_json,
+                    scorer_cache,
+                    overall,
+                    SCORER_TOOL_VERSION,
+                )
             update_run_metadata(run_id, status="DONE")
         except Exception as e:
             tb = traceback.format_exc(limit=20)

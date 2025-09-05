@@ -8,6 +8,7 @@ from datetime import datetime
 from threading import Lock
 from dotenv import load_dotenv
 from google import genai
+from typing import Optional
 
 ANALYZER_TOOL_VERSION = "analyzer-0.1.0"
 
@@ -17,15 +18,18 @@ load_dotenv()
 # The script reads the API key from your environment variables for security.
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
-client = None
-if GOOGLE_API_KEY:
+_active_client = None  # replace old 'client'
+_active_model = None
+
+
+def set_ai_client(api_key: str, model: str):
+    global _active_client, _active_model
+    _active_model = model
     try:
-        client = genai.Client(api_key=GOOGLE_API_KEY)
-        print("✅ Gemini API configured successfully.")
+        _active_client = genai.Client(api_key=api_key)
     except Exception as e:
-        print(f"⚠️  Gemini API init failed: {e}")
-else:
-    print("⚠️  GOOGLE_API_KEY not set; AI checks will fail.")
+        _active_client = None
+        print(f"⚠️ Gemini client init failed for provided key: {e}")
 
 
 # --- Rate Limiter & Caching Layer -------------------------------------------------
@@ -100,10 +104,10 @@ def generate_ai_content(prompt: str):
     for attempt in range(1, max_attempts + 1):
         _rate_limiter.acquire()
         try:
-            if client is None:
-                raise RuntimeError("AI client not configured (missing GOOGLE_API_KEY)")
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
+            if _active_client is None:
+                raise RuntimeError("AI client not configured (no active API key)")
+            response = _active_client.models.generate_content(
+                model=_active_model or GEMINI_MODEL,
                 contents=prompt,
             )
             answer = (response.text or "").strip()
@@ -349,11 +353,21 @@ def run_git_commit_count_check(check, repo_path):
         ]
 
 
-def run_analyzer(repo_path: str, rubric_path: str = "rubric.yaml"):
-    """Run analysis programmatically.
-
-    Returns (md_report_str, json_obj, ai_cache_dict, total_passed, total_checks).
+def run_analyzer(
+    repo_path: str,
+    rubric_path: str = "rubric.yaml",
+    api_key: Optional[str] = None,
+    model: Optional[str] = None,
+):
     """
+    api_key/model optional: if provided, sets a temporary active client for this run.
+    """
+    if api_key:
+        set_ai_client(api_key, model or GEMINI_MODEL)
+    elif _active_client is None and GOOGLE_API_KEY:
+        # fallback if caller didn't supply
+        set_ai_client(GOOGLE_API_KEY, model or GEMINI_MODEL)
+
     if not os.path.isdir(repo_path):
         raise ValueError("Repository path invalid")
     try:
