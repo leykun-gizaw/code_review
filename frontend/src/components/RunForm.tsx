@@ -57,7 +57,7 @@ export function RunForm({ onCreated }: Props) {
           disabled={loading}
           className="h-[42px] inline-flex items-center px-5 rounded-md font-semibold bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition"
         >
-          {loading ? "Submitting..." : "Create & Analyze"}
+          {loading ? "Submitting..." : "Submit"}
         </button>
       </div>
       {error && (

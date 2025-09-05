@@ -134,25 +134,19 @@ def generate_ai_content(prompt: str):
 # -------------------------------------------------------------------------------
 # -------------------------
 
-
-def find_file_in_repo(filename, repo_path):
-    """Recursively finds the first occurrence of a file in the repository."""
-    for root, _, files in os.walk(repo_path):
-        if filename in files:
-            return os.path.join(root, filename)
-    return None
+AI_SCORE_MAP = {"PASS": 1.0, "PARTIAL": 0.5, "FAIL": 0.0}
 
 
 def run_ai_check(check, repo_path):
-    """Gathers context, builds prompt, delegates to generate_ai_content.
+    """Run an AI-based check and return (status, details_list, score).
 
-    Refactored to centralize retry/rate-limit/caching logic.
+    status: PASS | PARTIAL | FAIL
+    score:  1.0  | 0.5     | 0.0  (only ai_check supports PARTIAL)
     """
-
     prompt_template = check.get("prompt", "")
-
-    # Context: Git log
     details = []
+
+    # Git log context
     if check.get("context_source") == "git_log":
         try:
             process = subprocess.run(
@@ -173,10 +167,14 @@ def run_ai_check(check, repo_path):
             )
             context = process.stdout or "(no commits)"
         except Exception as e:
-            return False, [f"  - FAILED: Could not retrieve git history. Error: {e}"]
+            return (
+                "FAIL",
+                [f"  - FAILED: Could not retrieve git history. Error: {e}"],
+                0.0,
+            )
         prompt = prompt_template.format(context=context, file_path=None)
 
-    # Context: Files
+    # File context
     elif "files_to_analyze" in check:
         consolidated_context = ""
         missing = []
@@ -188,7 +186,6 @@ def run_ai_check(check, repo_path):
             try:
                 with open(file_path, "r", errors="ignore") as f:
                     content = f.read()
-                # Lightweight truncation per file to avoid single huge context
                 max_file_len = int(check.get("per_file_char_limit", 8000))
                 if len(content) > max_file_len:
                     content = content[:max_file_len] + "\n... (truncated)"
@@ -198,10 +195,11 @@ def run_ai_check(check, repo_path):
                     f"\n\n--- FILE: {file_path} (read error: {e}) ---\n"
                 )
         if not consolidated_context:
-            return False, [
-                "  - FAILED: None of the target files for analysis were found."
-            ]
-        # Global cap
+            return (
+                "FAIL",
+                ["  - FAILED: None of the target files for analysis were found."],
+                0.0,
+            )
         global_cap = int(check.get("total_context_char_limit", 30000))
         if len(consolidated_context) > global_cap:
             consolidated_context = (
@@ -214,38 +212,115 @@ def run_ai_check(check, repo_path):
         if missing:
             details.append(f"  - INFO: Missing files skipped: {', '.join(missing)}")
     else:
-        return False, [
-            "  - FAILED: AI check misconfigured (needs 'context_source' or 'files_to_analyze')."
-        ]
+        return (
+            "FAIL",
+            [
+                "  - FAILED: AI check misconfigured (needs 'context_source' or 'files_to_analyze')."
+            ],
+            0.0,
+        )
 
     print("  - 🤖 Sending context to AI (with caching & rate limiting)...")
     ok, answer = generate_ai_content(prompt)
     prefix = "  - "
-    if ok:
-        if answer.upper().startswith("PASS"):
-            return True, details + [prefix + answer]
-        return False, details + [prefix + answer]
-    return False, details + [prefix + answer]
+    if not ok:
+        return "FAIL", details + [prefix + answer], 0.0
+
+    # Parse first token for PASS / PARTIAL / FAIL
+    first_line = answer.strip().splitlines()[0] if answer.strip() else ""
+    token = first_line.split(None, 1)[0].upper() if first_line else "FAIL"
+    if token not in AI_SCORE_MAP:
+        # If rubric not yet updated to output PARTIAL, fall back:
+        if token.startswith("PASS"):
+            token = "PASS"
+        elif token.startswith("FAIL"):
+            token = "FAIL"
+        else:
+            token = "FAIL"
+    score = AI_SCORE_MAP[token]
+    return token, details + [prefix + answer], score
+
+
+def find_file_in_repo(filename, repo_path):
+    """Recursively finds the first occurrence of a file in the repository."""
+    for root, _, files in os.walk(repo_path):
+        if filename in files:
+            return os.path.join(root, filename)
+    return None
 
 
 def run_file_exists_check(check, repo_path):
     """Checks if a single file or one of multiple possible files exists."""
+    recursive = bool(check.get("recursive"))  # optional flag enabling deep search
+    max_depth = int(check.get("max_depth", 2))  # default depth limit when recursive
+
+    def _recursive_search(target_names):
+        """Return (found: bool, relative_path or None).
+
+        Constraints:
+        - Searches by basename only.
+        - Ignores any directory named '.venv'.
+        - Prunes traversal beyond `max_depth` levels below repo root.
+        """
+        basenames = {os.path.basename(p) for p in target_names}
+        root_depth = repo_path.rstrip(os.sep).count(os.sep)
+        for root, dirs, files in os.walk(repo_path):
+            # Current depth (root depth = 0)
+            current_depth = root.rstrip(os.sep).count(os.sep) - root_depth
+            # Prune directories in-place: remove '.venv' and those that would exceed max_depth
+            if current_depth >= max_depth:
+                # No need to descend further from here
+                dirs[:] = []
+            else:
+                dirs[:] = [
+                    d for d in dirs if d != ".venv"  # ignore virtual env folders
+                ]
+            intersect = basenames.intersection(files)
+            if intersect:
+                chosen = sorted(intersect)[0]
+                rel_path = os.path.relpath(os.path.join(root, chosen), repo_path)
+                return True, rel_path
+        return False, None
+
     if "path" in check:
-        path_to_check = os.path.join(repo_path, check["path"])
+        raw = check["path"]
+        path_to_check = os.path.join(repo_path, raw)
         if os.path.exists(path_to_check):
-            return True, [f"  - PASSED: '{check['path']}' found."]
-        else:
-            return False, [f"  - FAILED: '{check['path']}' does not exist."]
+            return True, [f"  - PASSED: '{raw}' found."]
+        if recursive:
+            found, rel = _recursive_search([raw])
+            if found:
+                return True, [
+                    f"  - PASSED: Found '{os.path.basename(raw)}' at '{rel}' via recursive search.",
+                    f"  - INFO: Original expected path '{raw}' not present at root.",
+                ]
+        return False, [
+            f"  - FAILED: '{raw}' does not exist"
+            + (" anywhere in repo." if recursive else "."),
+        ]
 
     elif "paths" in check:
+        # First pass: direct matches
         for path_option in check["paths"]:
             if os.path.exists(os.path.join(repo_path, path_option)):
                 return True, [
                     f"  - PASSED: Found required dependency file ('{path_option}')."
                 ]
-
+        # Second pass: recursive if enabled
+        if recursive:
+            found, rel = _recursive_search(check["paths"])
+            if found:
+                rel_display = rel or "(unknown)"
+                base_display = os.path.basename(rel_display)
+                return True, [
+                    f"  - PASSED: Found one of required files ('{base_display}') at '{rel_display}' via recursive search.",
+                    "  - INFO: None matched at provided top-level paths.",
+                ]
         or_string = "' or '".join(check["paths"])
-        return False, [f"  - FAILED: Could not find '{or_string}'."]
+        return False, [
+            f"  - FAILED: Could not find '{or_string}'"
+            + (" (recursive search also failed)." if recursive else "."),
+        ]
 
     return False, ["  - FAILED: Check is misconfigured (needs 'path' or 'paths')."]
 
@@ -287,36 +362,82 @@ def run_analyzer(repo_path: str, rubric_path: str = "rubric.yaml"):
     except FileNotFoundError:
         raise FileNotFoundError("rubric.yaml not found")
 
-    all_results = {}
+    results = []  # collect dicts
     total_passed = 0
-    check_functions = {
-        "ai_check": run_ai_check,
-        "file_exists": run_file_exists_check,
-        "git_commit_count": run_git_commit_count_check,
-    }
+    total_partial = 0
+
     for check in rubric["checks"]:
         ctype = check.get("type")
         title = check.get("name", "Unnamed Check")
-        if ctype in check_functions:
-            passed, details = check_functions[ctype](check, repo_path)
+
+        if ctype == "ai_check":
+            status, details, score = run_ai_check(check, repo_path)
+            passed_bool = status == "PASS"
+            partial_bool = status == "PARTIAL"
+            if passed_bool:
+                total_passed += 1
+            elif partial_bool:
+                total_partial += 1
+            results.append(
+                {
+                    "name": title,
+                    "type": ctype,
+                    "status": status,
+                    "score": score,
+                    "details": [d.strip() for d in details],
+                }
+            )
+        elif ctype == "file_exists":
+            passed, details = run_file_exists_check(check, repo_path)
+            score = 1.0 if passed else 0.0
             if passed:
                 total_passed += 1
-            all_results[title] = (passed, details)
+            results.append(
+                {
+                    "name": title,
+                    "type": ctype,
+                    "status": "PASS" if passed else "FAIL",
+                    "score": score,
+                    "details": [d.strip() for d in details],
+                }
+            )
+        elif ctype == "git_commit_count":
+            passed, details = run_git_commit_count_check(check, repo_path)
+            score = 1.0 if passed else 0.0
+            if passed:
+                total_passed += 1
+            results.append(
+                {
+                    "name": title,
+                    "type": ctype,
+                    "status": "PASS" if passed else "FAIL",
+                    "score": score,
+                    "details": [d.strip() for d in details],
+                }
+            )
         else:
-            all_results[title] = (False, [f"  - FAILED: Unknown check type '{ctype}'."])
+            results.append(
+                {
+                    "name": title,
+                    "type": ctype,
+                    "status": "FAIL",
+                    "score": 0.0,
+                    "details": [f"FAILED: Unknown check type '{ctype}'."],
+                }
+            )
 
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-    # Build markdown string
+
+    # Markdown report
     lines = [
         "# Analysis Report",
         f"Generated: {timestamp}",
-        f"Total: {len(rubric['checks'])} | Passed: {total_passed} | Failed: {len(rubric['checks'])-total_passed}",
+        f"Total: {len(results)} | Pass: {total_passed} | Partial: {total_partial} | Fail: {len(results)-total_passed-total_partial}",
         "---",
     ]
-    for title, (passed_status, details) in all_results.items():
-        state = "PASS" if passed_status else "FAIL"
-        lines.append(f"## [{state}] {title}")
-        for d in details:
+    for r in results:
+        lines.append(f"## [{r['status']}] {r['name']}")
+        for d in r["details"]:
             content = d.lstrip()
             if not content.startswith("- "):
                 content = content.replace("  - ", "", 1)
@@ -324,24 +445,25 @@ def run_analyzer(repo_path: str, rubric_path: str = "rubric.yaml"):
         lines.append("")
     md_report = "\n".join(lines) + "\n"
 
+    # JSON summary
+    total_points = sum(1.0 for _ in results)  # each check weight =1 for now
+    earned_points = sum(r["score"] for r in results)
     json_obj = {
         "generated_at": timestamp,
         "summary": {
-            "total_checks": len(rubric["checks"]),
+            "total_checks": len(results),
             "passed": total_passed,
-            "failed": len(rubric["checks"]) - total_passed,
+            "partial": total_partial,
+            "failed": len(results) - total_passed - total_partial,
+            "total_points": total_points,
+            "earned_points": earned_points,
+            "percent": (
+                round((earned_points / total_points) * 100, 2) if total_points else 0.0
+            ),
         },
-        "checks": [
-            {
-                "name": title,
-                "status": "PASSED" if passed else "FAILED",
-                "details": [d.strip() for d in details],
-            }
-            for title, (passed, details) in all_results.items()
-        ],
+        "checks": results,
     }
-    # expose current AI cache snapshot
-    return md_report, json_obj, _ai_cache, total_passed, len(rubric["checks"])
+    return md_report, json_obj, _ai_cache, total_passed, len(results)
 
 
 def main():

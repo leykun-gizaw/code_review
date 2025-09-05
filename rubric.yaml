@@ -1,8 +1,4 @@
 checks:
-  # Global Notes:
-  # - Each ai_check may define: per_file_char_limit, total_context_char_limit, git_log_depth
-  # - Keep limits modest to reduce token usage and rate limiting.
-
   # --- SECTION 1: PROJECT SETUP & DOCUMENTATION ---
   - name: "S1.1: A comprehensive README.md is present"
     type: "ai_check"
@@ -10,29 +6,33 @@ checks:
     per_file_char_limit: 6000
     total_context_char_limit: 6000
     prompt: >
-      You are a technical writing expert reviewing a project's README.md file.
-      The README must be comprehensive and clear for a new developer.
-      Evaluate it based on the following criteria:
-      1.  **Project Title & Description:** Is there a clear title and a concise summary of what the project does?
-      2.  **Installation Guide:** Are there step-by-step instructions on how to set up the project locally (e.g., clone repo, create virtual environment, install dependencies)?
-      3.  **Usage Instructions:** Is it explained how to run the application (e.g., `python manage.py runserver`) and how to use its features?
-      4.  **Tech Stack:** Does it mention the key technologies used (e.g., Django, Python, PostgreSQL)?
-      
+      You are reviewing a BEGINNER Django project README.
+      Scoring:
+      - PASS: Has ALL THREE core elements: (1) title/heading, (2) brief description, (3) basic install/run steps.
+      - PARTIAL: Has only TWO of the core elements OR all three are present but one is very weak (e.g. ultra vague description).
+      - FAIL: Has zero or only one core element.
+      Improvement ideas (usage examples, contribution guide, env file docs) should NOT reduce to FAIL—list them as suggestions.
+      Output format:
+      PASS|PARTIAL|FAIL - short reason
+      Suggestions:
+      - bullet 1
+      - bullet 2
+
       CONTEXT (README.md):
       ---
       {context}
       ---
 
-      Does the README meet the criteria for being comprehensive and clear?
-      Your final answer must start with a single word: PASS or FAIL, followed by a detailed justification of what is missing or well-executed.
-
   - name: "S1.2: Project dependencies are properly managed"
     type: "file_exists"
     paths: ["requirements.txt", "Pipfile", "pyproject.toml"]
+    recursive: true
+    max_depth: 2
 
   - name: "S1.3: Sensitive files and virtual environments are ignored"
     type: "file_exists"
     path: ".gitignore"
+    recursive: true
 
   # --- SECTION 2: CODE QUALITY & BEST PRACTICES ---
   - name: "S2.1: Code is clean, readable, and well-structured"
@@ -41,19 +41,22 @@ checks:
     per_file_char_limit: 5000
     total_context_char_limit: 18000
     prompt: >
-      You are a senior Python/Django developer reviewing code for quality.
-      Analyze the provided code from `{file_path}` based on these criteria:
-      1.  **Readability:** Are variable and function names descriptive (e.g., `get_active_users()` instead of `getData()`)?
-      2.  **Simplicity:** Is the code overly complex? Are functions short and focused on a single responsibility?
-      3.  **Comments:** Are there comments where necessary to explain complex logic, but not so many that they clutter the code?
-      4.  **DRY Principle (Don't Repeat Yourself):** Is there significant code duplication that could be refactored into a reusable function or class?
+      Beginner Django readability review.
+      Scoring:
+      - PASS: Naming mostly clear; structure understandable; no large duplicated blocks; only minor style issues.
+      - PARTIAL: Overall understandable but 2–3 moderate issues (some vague names, some duplication, a few long functions).
+      - FAIL: Multiple severe issues making code hard to follow (widespread unclear naming + big duplication OR dead code blobs).
+      Output:
+      PASS|PARTIAL|FAIL - brief reason
+      Improvements:
+      - bullet 1
+      - bullet 2
+      - bullet 3 (max 5)
 
       CONTEXT:
       ---
       {context}
       ---
-      
-      Is the code quality high? Your final answer must start with PASS or FAIL, with a justification pointing out specific examples of good or bad practices.
 
   - name: "S2.2: Basic security practices are followed"
     type: "ai_check"
@@ -61,18 +64,20 @@ checks:
     per_file_char_limit: 5000
     total_context_char_limit: 10000
     prompt: >
-      You are a security auditor specializing in Django.
-      Review the code from `{file_path}` for common security vulnerabilities:
-      1.  **Hardcoded Secrets:** Are there any secret keys, passwords, or API keys directly in the code? They should be loaded from environment variables.
-      2.  **Debug Mode:** In `settings.py`, is `DEBUG` set to `True`? If so, warn that this should never be the case in production.
-      3.  **SQL Injection:** If raw SQL is used, does it appear to be parameterized correctly to prevent SQL injection? (Look for `cursor.execute("SELECT ... %s", [param])`).
-      
+      Beginner security audit (focus on obvious issues).
+      Scoring:
+      - PASS: No hardcoded SECRET_KEY or credentials. DEBUG True alone does NOT force PARTIAL/FAIL.
+      - PARTIAL: No secrets exposed but some risky config (DEBUG True + wide ALLOWED_HOSTS, or missing use of env for DB).
+      - FAIL: SECRET_KEY or credentials plainly hardcoded OR obvious sensitive token in code.
+      Output:
+      PASS|PARTIAL|FAIL - short reason
+      Suggestions:
+      - bullet list (only if PARTIAL/FAIL)
+
       CONTEXT:
       ---
       {context}
       ---
-
-      Does the code exhibit any obvious security flaws? Your final answer must start with PASS or FAIL, and you must list any potential vulnerabilities you find.
 
   - name: "S2.3: Functions and views are not excessively complex"
     type: "ai_check"
@@ -80,41 +85,46 @@ checks:
     per_file_char_limit: 5000
     total_context_char_limit: 9000
     prompt: >
-      You are a Python code reviewer focused on cyclomatic and structural complexity.
-      Review the provided code and flag any functions or methods that likely exceed reasonable complexity (e.g., >15 branches, deeply nested conditionals, very long functions >60 lines).
-      Provide:
-      -  List of top 5 most complex functions: name, file, rough line span, reason.
-      -  Any obvious refactoring opportunities (extract method, early return, model method move, serializer validation extraction, etc.).
+      Complexity review (beginner tolerance).
+      Scoring:
+      - PASS: Functions mostly short/medium; nesting shallow; any long function still linear/readable.
+      - PARTIAL: A few (1–2) long or moderately nested functions but not pervasive; still maintainable.
+      - FAIL: Several (>=3) very long AND deeply nested / tangled functions or clear spaghetti patterns.
+      Output:
+      PASS|PARTIAL|FAIL - brief reason
+      Hotspots:
+      - function_name (why)  (list only if PARTIAL/FAIL)
 
       CONTEXT:
       ---
       {context}
       ---
 
-      If no problematic functions are found say PASS with a short justification. Otherwise start with FAIL and list findings.
-
   # --- SECTION 3: VERSION CONTROL (GIT) ---
   - name: "S3.1: Sufficient commit history exists"
     type: "git_commit_count"
-    min_commits: 5
+    min_commits: 3
 
   - name: "S3.2: Git commit messages are meaningful and follow conventions"
     type: "ai_check"
     context_source: "git_log"
     git_log_depth: 40
     prompt: >
-      You are a Git expert evaluating a repository's commit history.
-      A good commit history tells a story. Evaluate the git log based on these criteria:
-      1.  **Message Quality:** Are the messages descriptive and in the imperative mood (e.g., "Add user authentication" not "added stuff")?
-      2.  **Conventional Commits:** Do the messages follow a convention like `feat:`, `fix:`, `docs:`, `refactor:`? This is a strong positive sign.
-      3.  **Atomicity:** Does it look like commits are small and logical, or are there huge, unrelated changes in single commits?
+      Git message quality (beginner).
+      Scoring:
+      - PASS: Majority (>=60%) of commits have descriptive messages (even without Conventional prefix).
+      - PARTIAL: 40–59% descriptive OR too many generic messages but some are ok.
+      - FAIL: Very sparse history (1–2 commits) OR most messages meaningless (“update”, “fix”, “stuff”).
+      Output:
+      PASS|PARTIAL|FAIL - short reason
+      Improvements:
+      - bullet 1
+      - bullet 2 (max 3)
 
       CONTEXT (GIT LOG):
       ---
       {context}
       ---
-
-      Is the Git history clean and professional? Your final answer must start with PASS or FAIL, followed by a justification.
 
   # --- SECTION 4: DJANGO-SPECIFIC BEST PRACTICES ---
   - name: "S4.1: Follows 'Fat Models, Skinny Views' philosophy"
@@ -123,19 +133,20 @@ checks:
     per_file_char_limit: 6000
     total_context_char_limit: 11000
     prompt: >
-      You are a Django expert evaluating project structure based on the "Fat Models, Skinny Views" principle.
-      The goal is to keep business logic within the model layer (`models.py`) and keep the view layer (`views.py`) thin and focused on handling HTTP requests/responses.
-      
-      Review the code in `models.py` and `views.py`.
-      -   Does `models.py` contain custom methods that encapsulate business logic (e.g., `user.is_premium()`, `order.calculate_total()`)?
-      -   Are the functions or classes in `views.py` cluttered with complex business logic that should be on the model instead?
-      
-      CONTEXT (MODELS.PY and VIEWS.PY):
+      Evaluate distribution of business logic.
+      Scoring:
+      - PASS: Views mostly thin; heavy logic either absent or acceptably small.
+      - PARTIAL: Some (1–2) views contain logic that could move to model/helpers, but not systemic.
+      - FAIL: Many views hold large business logic blocks that clearly belong in models/services.
+      Output:
+      PASS|PARTIAL|FAIL - reason
+      Suggestions:
+      - bullet list (only if PARTIAL/FAIL)
+
+      CONTEXT:
       ---
       {context}
       ---
-      
-      Does the project adhere to the 'Fat Models, Skinny Views' principle? Your final answer must be PASS or FAIL with a clear explanation.
 
   - name: "S4.2: URL patterns are named and well-structured"
     type: "ai_check"
@@ -143,30 +154,26 @@ checks:
     per_file_char_limit: 4000
     total_context_char_limit: 4000
     prompt: >
-      You are a Django developer reviewing `urls.py`.
-      A best practice is to name every URL pattern using the `name` keyword argument. This makes them easy to reference from templates and views.
-      
-      Review the `urlpatterns` list in the provided `urls.py` file. Does every `path()` or `re_path()` call include a `name='...'` argument?
-      
-      CONTEXT (URLS.PY):
+      URL naming assessment.
+      Scoring:
+      - PASS: >70% of patterns have a name; structure readable.
+      - PARTIAL: 40–70% named OR inconsistent naming; rest still understandable.
+      - FAIL: Majority unnamed or chaotic organization.
+      Output:
+      PASS|PARTIAL|FAIL - short reason
+      Missing:
+      - pattern detail (only if PARTIAL/FAIL)
+
+      CONTEXT:
       ---
       {context}
       ---
 
-      Are all URL patterns properly named? Your final answer must be PASS or FAIL. If FAIL, list the line numbers of the unnamed paths.
-
-  # --- SECTION 5: TESTING & ENV / DEPLOYMENT ---
-  - name: "S5.1: Tests folder exists"
-    type: "file_exists"
-    paths: ["tests", "tests.py", "accounts/tests.py", "recipes/tests.py"]
+  # --- SECTION 5: ENV / DEPLOYMENT ---
 
   - name: "S5.2: Example environment file present"
     type: "file_exists"
     paths: [".env.example", "example.env", "env.sample"]
-
-  - name: "S5.3: License file present"
-    type: "file_exists"
-    paths: ["LICENSE", "LICENSE.md"]
 
   - name: "S5.4: Settings use environment variables for secrets"
     type: "ai_check"
@@ -174,16 +181,17 @@ checks:
     per_file_char_limit: 6000
     total_context_char_limit: 6000
     prompt: >
-      You are auditing Django settings for proper environment-based configuration.
-      Check that:
-      - SECRET_KEY is not hard-coded (should reference env var, e.g., os.getenv or environ module).
-      - DATABASE credentials (ENGINE/NAME/USER/PASSWORD/HOST) are not plainly embedded.
-      - DEBUG defaults to False (or at least is env-controlled) in production context.
-      - ALLOWED_HOSTS is not wide open with '*'.
+      Environment variable usage for secrets.
+      Scoring:
+      - PASS: SECRET_KEY and DB credentials not hardcoded.
+      - PARTIAL: Secrets not hardcoded but env usage inconsistent (e.g. DEBUG or other config inline).
+      - FAIL: SECRET_KEY or credentials plainly hardcoded.
+      Output:
+      PASS|PARTIAL|FAIL - reason
+      Suggestions:
+      - bullet list (only if PARTIAL/FAIL)
 
-      CONTEXT (settings.py):
+      CONTEXT:
       ---
       {context}
       ---
-
-      Start with PASS if all are acceptable, otherwise FAIL and list issues succinctly.
