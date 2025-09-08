@@ -26,6 +26,8 @@ export function RunForm({ onCreated }: Props) {
       setError(err.message || "Failed");
     } finally {
       setLoading(false);
+      setEmail("");
+      setRepo("");
     }
   }
 
