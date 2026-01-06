@@ -1,11 +1,13 @@
 import { useEffect, useState, useRef } from "react";
 import { listRuns, enqueueRun, getRun, RunRow } from "../api";
+import clsx from "clsx";
 
 interface Props {
   onSelect(id: number): void;
+  currentId: number | null;
 }
 
-export function RunsTable({ onSelect }: Props) {
+export function RunsTable({ onSelect, currentId }: Props) {
   const [rows, setRows] = useState<RunRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,7 +102,9 @@ export function RunsTable({ onSelect }: Props) {
             {rows.map((r) => (
               <tr
                 key={r.id}
-                className="border-t border-slate-100 hover:bg-slate-50"
+                className={clsx("border-t border-slate-100 hover:bg-slate-50", {
+                  "bg-slate-100": currentId === r.id,
+                })}
               >
                 <td className="px-3 py-2 font-medium text-slate-800">
                   <button
@@ -125,7 +129,7 @@ export function RunsTable({ onSelect }: Props) {
                 <td className="px-3 py-2">
                   {r.overall_score != null ? r.overall_score : "—"}
                 </td>
-                <td className="px-3 py-2 space-x-2">
+                <td className="px-3 py-2 space-x-2 flex">
                   {(r.status === "PENDING" || r.status === "ERROR") && (
                     <button
                       disabled={busy === r.id}
@@ -137,7 +141,7 @@ export function RunsTable({ onSelect }: Props) {
                   )}
                   <button
                     onClick={() => onSelect(r.id)}
-                    className="px-2 py-1 rounded border border-slate-300 text-xs"
+                    className="px-2 py-1 rounded border border-slate-300 text-xs flex-1"
                   >
                     View
                   </button>
@@ -168,6 +172,7 @@ function statusBadge(status: string) {
     ANALYZED: "bg-purple-500",
     DONE: "bg-green-600",
     ERROR: "bg-red-600",
+    QUEUED: "bg-yellow-500",
   };
   return (
     <span

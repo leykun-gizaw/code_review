@@ -79,7 +79,7 @@ def worker_loop():
         run_row = get_run(run_id)
         if not run_row:
             continue
-        if run_row.get("status") not in ("PENDING", "ERROR"):
+        if run_row.get("status") not in ("PENDING", "ERROR", "QUEUED"):
             continue
         update_run_metadata(run_id, status="RUNNING")
         repo_url = run_row["github_url"]
@@ -200,6 +200,7 @@ def enqueue_run(run_id: int):
         return jsonify({"error": "not found"}), 404
     ensure_worker()
     JOB_QUEUE.put(run_id)
+    update_run_metadata(run_id, status="QUEUED")
     return jsonify({"queued": True, "id": run_id})
 
 

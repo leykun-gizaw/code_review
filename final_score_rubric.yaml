@@ -1,127 +1,128 @@
-# Junior‑aware secondary scoring rubric.
-# Each criterion scored 0.0–1.0 in 0.1 increments.
-# The model receives analyzer output (which now includes PASS / PARTIAL / FAIL and summaries).
-# Philosophy:
-# - Start from a generous baseline when core fundamentals appear (several PASS or PARTIAL).
-# - PARTIAL in analyzer usually maps to mid band (0.4–0.7) not a near-fail.
-# - Lack of explicit evidence => cautious mid (0.4–0.6), not punitive low, unless analyzer shows FAIL signals.
+# Final scoring rubric.
+# This file takes the PASS/PARTIAL/FAIL output from the analyzer (rubric.yaml)
+# and maps it to the final weighted score categories.
+# It is designed to be "junior-aware," meaning PARTIAL and non-critical FAILs
+# are not punished excessively.
 
 criteria:
-  - id: features
-    name: "Features work as intended"
+  - id: readme_detail
+    name: "README Exists and is Well Detailed"
     weight: 1
     prompt: |
-      You are grading a BEGINNER Django project. Use ONLY analyzer output.
-      Heuristics (junior-friendly):
-        - Many PASS + few FAIL => assume core features likely run: 0.7–0.9 (maybe 1.0 if README + structure strong).
-        - Mix of PASS and PARTIAL, sparse FAIL => 0.5–0.7.
-        - Several FAIL in foundational areas (README missing + security fail + structure fail) => 0.2–0.4.
-        - Overwhelming FAIL signals => 0.0–0.2.
-        - If evidence thin but not negative: default to 0.5 (do NOT guess very high or very low).
-      Allowed values: 0.0 0.1 ... 1.0 (step 0.1)
+      You are grading a BEGINNER project's documentation.
+      Use the analyzer checks R2.1 (README) and R2.2 (Dependencies).
+      
+      Heuristics:
+        - R2.1: PASS (all 3 elements) AND R2.2: PASS (reqs file) => 0.9–1.0
+        - R2.1: PASS but R2.2: FAIL => 0.7–0.8 (Good docs, but missed a key setup file)
+        - R2.1: FAIL (missing elements) => 0.2–0.4 (README exists but is poor)
+        - R2.1: Not found / completely empty => 0.0
+
+      Allowed values: 0.0, 0.1, ..., 1.0 (step 0.1)
       Output strictly two lines:
       SCORE: <value>
-      JUSTIFICATION: <concise reason referencing PASS/PARTIAL/FAIL counts>
+      JUSTIFICATION: <Concise reason referencing R2.1 and R2.2 results>
 
   - id: code_quality
-    name: "Code is clean, readable and well structured"
-    weight: 1
+    name: "Code is Clean, Readable and Well Structured"
+    weight: 4
     prompt: |
-      Junior tolerance. Map analyzer checks:
-        - If "Code is clean" PASS and complexity PASS (or PARTIAL) => 0.8–1.0.
-        - If one PASS and others PARTIAL (no FAIL) => 0.6–0.8.
-        - PARTIAL + PARTIAL (no FAIL) => 0.5–0.6.
-        - Any single FAIL but rest PASS/PARTIAL => 0.3–0.5.
-        - Multiple related FAIL (readability + complexity) => 0.0–0.3.
-      Prefer mid (0.5–0.6) over very low if issues are typical beginner style, not catastrophic.
-      Allowed: 0.0–1.0 step 0.1
-      Format:
+      You are grading a BEGINNER project's code quality (0-4 pt scale, so 0.0-1.0).
+      Use checks R3.1 (Clean Code), R3.2 (Security), R3.3 (.gitignore), R3.4 (.env.example).
+      R3.1 is the most important check.
+      
+      Heuristics:
+        - R3.1: PASS + R3.2: PASS + R3.3: PASS => 3.5–4.0 (Excellent structure)
+        - R3.1: PASS + one or two FAILs on others => 3.0–3.5 (Core code is good, misses setup)
+        - R3.1: PARTIAL + other checks are PASS/PARTIAL => 2.0–2.9 (Average beginner code)
+        - R3.1: PARTIAL + FAILs on R3.2/R3.3 => 1.0–1.9 (Struggling with structure)
+        - R3.1: FAIL => 0.0–0.9 (Core code is hard to follow)
+
+      Allowed values: 0.0, 0.1, ..., 4.0 (step 0.1)
+      Output strictly two lines:
       SCORE: <value>
-      JUSTIFICATION: <reason>
+      JUSTIFICATION: <Reason referencing R3.1, R3.2, R3.3, and R3.4>
 
   - id: git_usage
-    name: "Git has properly been used"
+    name: "Git Properly Used"
     weight: 1
     prompt: |
-      Evaluate commit message quality + organization.
-        - PASS on Git messages => 0.7–0.9 (bump to 1.0 if very strong wording implied).
-        - PARTIAL => 0.5–0.6.
-        - FAIL but commit count OK => 0.3–0.4.
-        - FAIL plus sparse history => 0.0–0.2.
-      If evidence ambiguous (few signals), default 0.5 not 0.2.
-      Allowed: 0.0–1.0 step 0.1
-      SCORE: <value>
-      JUSTIFICATION: <reason>
+      You are grading a BEGINNER project's Git usage.
+      Use the single analyzer check R4.1 (Git history).
+      
+      Heuristics:
+        - R4.1: PASS (Good count + good messages) => 0.8–1.0
+        - R4.1: PARTIAL (e.g., good count, bad messages) => 0.5–0.6
+        - R4.1: FAIL (e.g., <=3 commits AND bad messages) => 0.0–0.2
 
-  - id: commit_history
-    name: "Proper commit history (not one big commit)"
+      Allowed values: 0.0, 0.1, ..., 1.0 (step 0.1)
+      Output strictly two lines:
+      SCORE: <value>
+      JUSTIFICATION: <Reason based on R4.1 PASS/PARTIAL/FAIL status>
+
+  - id: original_idea
+    name: "Original Idea"
     weight: 1
     prompt: |
-      Use commit count + any analyzer git history notes.
-        - Count >= min (3) and variety implied => 0.7–0.9.
-        - Just meets threshold with little variety => 0.5–0.6.
-        - Slightly below or barely passes with warning signals => 0.4–0.5.
-        - Very sparse (1–2 commits) => 0.0–0.3.
-      If analyzer did not provide log (edge), set 0.4 unless failure stated.
-      Allowed: 0.0–1.0 step 0.1
-      SCORE: <value>
-      JUSTIFICATION: <reason>
+      You are grading a BEGINNER project's originality.
+      Use the analyzer check R5.1 (Original concept). Be generous.
+      
+      Heuristics:
+        - R5.1: PASS (Appears original) => 0.9–1.0
+        - R5.1: FAIL (Direct tutorial clone) => 0.0–0.2
 
-  - id: invalid_inputs
-    name: "Handles invalid inputs gracefully"
+      Allowed values: 0.0, 0.1, ..., 1.0 (step 0.1)
+      Output strictly two lines:
+      SCORE: <value>
+      JUSTIFICATION: <Reason based on R5.1 PASS/FAIL status>
+
+  - id: error_handling
+    name: "Proper Error Handling"
     weight: 1
     prompt: |
-      Infer robustness indirectly (serializers, forms, validation hints).
-        - Security + structure PASS plus mention of forms/serializers => 0.7–0.9.
-        - Mixed PASS/PARTIAL with no explicit validation mention => 0.5–0.6.
-        - Explicit FAILs on structure or security (could imply fragility) => 0.3–0.4.
-        - Strong negative evidence (error-prone patterns) => 0.0–0.2.
-      Lack of evidence alone: choose 0.5 (neutral).
-      Allowed steps 0.1.
-      SCORE: <value>
-      JUSTIFICATION: <reason>
+      You are grading a BEGINNER project's error handling.
+      Use the analyzer check R7.1 (Basic error handling).
+      
+      Heuristics:
+        - R7.1: PASS (try/except, .is_valid(), etc. present) => 0.8–1.0
+        - R7.1: FAIL (No visible error handling) => 0.0–0.3
 
-  - id: error_messages
-    name: "Meaningful error messages instead of crashing"
+      Allowed values: 0.0, 0.1, ..., 1.0 (step 0.1)
+      Output strictly two lines:
+      SCORE: <value>
+      JUSTIFICATION: <Reason based on R7.1 PASS/FAIL status>
+
+  - id: api_docs
+    name: "Provided API Documentation"
     weight: 1
     prompt: |
-      Infer from presence of Django/DRF patterns, serializers, validation, no crash indicators.
-        - Strong structural PASS + no negative signals => 0.9–1.0.
-        - Limited evidence but stable basics => 0.6–0.8.
-        - Structural FAIL or complexity FAIL suggesting brittle error handling => 0.5–0.6.
-        - Severe multiple FAIL (readability + complexity + security) => 0.0–0.4.
-      Ambiguous: default 0.5.
-      Allowed: 0.0–1.0 step 0.1
-      SCORE: <value>
-      JUSTIFICATION: <reason>
+      You are grading a BEGINNER project's API documentation.
+      Use the analyzer check R8.1 (API Documentation).
+      
+      Heuristics:
+        - R8.1: PASS (README section or Swagger/Redoc found) => 0.9–1.0
+        - R8.1: FAIL (No API docs found) => 0.0–0.2
 
-  - id: readme_detail
-    name: "Well detailed README provided"
+      Allowed values: 0.0, 0.1, ..., 1.0 (step 0.1)
+      Output strictly two lines:
+      SCORE: <value>
+      JUSTIFICATION: <Reason based on R8.1 PASS/FAIL status>
+
+  - id: features_work
+    name: "Features Work as Intended"
     weight: 1
     prompt: |
-      Use README check (PASS/PARTIAL/FAIL) directly:
-        - PASS + suggestions minor => 0.8–1.0.
-        - PARTIAL (missing 1 element) => 0.5–0.7 depending on completeness.
-        - FAIL but has at least one element (title or setup) => 0.3–0.4.
-        - Completely absent / unusable => 0.0–0.2.
-      If analyzer output truncated or unclear: 0.5 (neutral).
-      Allowed: 0.0–1.0 step 0.1
-      SCORE: <value>
-      JUSTIFICATION: <reason>
+      You are grading a BEGINNER project. Use ONLY analyzer output totals to INFER if features work.
+      This is a heuristic guess based on project health.
+      
+      Heuristics (junior-friendly):
+        - Majority PASS (>50% of all checks) + few FAILs => 0.7–0.9 (Assume core features run).
+        - Mix of PASS/PARTIAL/FAIL, no critical FAILs (e.g., R3.1 not FAIL) => 0.5–0.6 (Probably has some working parts).
+        - Several critical FAILs (e.g., R3.1: FAIL or R3.2: FAIL) => 0.2–0.4 (Unlikely to run).
+        - Overwhelming FAIL signals => 0.0–0.1 (Definitely broken).
+        - If evidence thin but not negative: default to 0.5.
 
-  - id: backend_docs
-    name: "Backend documentation provided (API / endpoints)"
-    weight: 1
-    prompt: |
-      Judge from README analysis + any hints of endpoints or usage examples.
-        - Explicit API/endpoint section or clear usage examples => 0.8–1.0.
-        - README PASS but no explicit API section => 0.5–0.7.
-        - README PARTIAL with vague references => 0.4–0.5.
-        - README FAIL and no API hints => 0.0–0.3.
-      If silent on APIs but otherwise structured: prefer 0.5 over very low (junior benefit of doubt).
-      Allowed: 0.0–1.0 step 0.1
+      Allowed values: 0.0, 0.1, ..., 1.0 (step 0.1)
+      Output strictly two lines:
       SCORE: <value>
-      JUSTIFICATION: <reason>
-
-# Optional: manual overrides (create a JSON file with id->score to replace AI results)
-# Not used by default; script will look for final_score_overrides.json if present.
+      JUSTIFICATION: <Concise reason referencing overall PASS/PARTIAL/FAIL counts>

@@ -1,6 +1,6 @@
 checks:
-  # --- SECTION 1: PROJECT SETUP & DOCUMENTATION ---
-  - name: "S1.1: A comprehensive README.md is present"
+  # --- R2: README Exists and is Well Detailed (0-1 pt) ---
+  - name: "R2.1: README Exists and is Well Detailed"
     type: "ai_check"
     files_to_analyze: ["README.md"]
     per_file_char_limit: 6000
@@ -8,12 +8,13 @@ checks:
     prompt: >
       You are reviewing a BEGINNER Django project README.
       Scoring:
-      - PASS: Has ALL THREE core elements: (1) title/heading, (2) brief description, (3) basic install/run steps.
-      - PARTIAL: Has only TWO of the core elements OR all three are present but one is very weak (e.g. ultra vague description).
-      - FAIL: Has zero or only one core element.
-      Improvement ideas (usage examples, contribution guide, env file docs) should NOT reduce to FAIL—list them as suggestions.
+      - PASS: Has ALL THREE core elements: (1) project title/heading, (2) brief description of what it does, (3) basic install/run steps.
+      - FAIL: Missing one or more of the three core elements.
+      
+      Improvement ideas (usage examples, contribution guide, etc.) are suggestions, not reasons for FAIL.
+
       Output format:
-      PASS|PARTIAL|FAIL - short reason
+      PASS|FAIL - short reason
       Suggestions:
       - bullet 1
       - bullet 2
@@ -23,29 +24,27 @@ checks:
       {context}
       ---
 
-  - name: "S1.2: Project dependencies are properly managed"
+  - name: "R2.2: Project dependencies are properly managed"
     type: "file_exists"
     paths: ["requirements.txt", "Pipfile", "pyproject.toml"]
     recursive: true
     max_depth: 2
 
-  - name: "S1.3: Sensitive files and virtual environments are ignored"
-    type: "file_exists"
-    path: ".gitignore"
-    recursive: true
-
-  # --- SECTION 2: CODE QUALITY & BEST PRACTICES ---
-  - name: "S2.1: Code is clean, readable, and well-structured"
+  # --- R3: Code is Clean, Readable and Well Structured (0-4 pts) ---
+  - name: "R3.1: Code is Clean, Readable, and Well-Structured"
     type: "ai_check"
-    files_to_analyze: ["views.py", "models.py", "serializers.py", "forms.py"]
+    files_to_analyze: ["views.py", "models.py", "serializers.py", "forms.py", "urls.py"]
     per_file_char_limit: 5000
-    total_context_char_limit: 18000
+    total_context_char_limit: 20000
     prompt: >
-      Beginner Django readability review.
-      Scoring:
-      - PASS: Naming mostly clear; structure understandable; no large duplicated blocks; only minor style issues.
-      - PARTIAL: Overall understandable but 2–3 moderate issues (some vague names, some duplication, a few long functions).
-      - FAIL: Multiple severe issues making code hard to follow (widespread unclear naming + big duplication OR dead code blobs).
+      Beginner Django code quality review.
+      Check for: (1) Readability (clear naming), (2) Complexity (short functions, low nesting), (3) Duplication, (4) Structure (e.g., 'Fat Models, Skinny Views'), (5) URL Naming.
+
+      Scoring (for a 0-4 pt scale):
+      - PASS: Very clean. Good naming, low complexity, good structure. (Maps to 3-4 pts)
+      - PARTIAL: Understandable, but 2-3 moderate issues (some vague names, 1-2 long/nested functions, some logic in views). (Maps to 1-2 pts)
+      - FAIL: Multiple severe issues making code hard to follow (widespread unclear naming, high complexity, lots of logic in views). (Maps to 0 pts)
+      
       Output:
       PASS|PARTIAL|FAIL - brief reason
       Improvements:
@@ -58,138 +57,122 @@ checks:
       {context}
       ---
 
-  - name: "S2.2: Basic security practices are followed"
+  - name: "R3.2: Basic security practices are followed (No hardcoded secrets)"
     type: "ai_check"
-    files_to_analyze: ["settings.py", "views.py"]
-    per_file_char_limit: 5000
-    total_context_char_limit: 10000
+    files_to_analyze: ["settings.py"]
+    per_file_char_limit: 6000
+    total_context_char_limit: 6000
     prompt: >
-      Beginner security audit (focus on obvious issues).
+      Environment variable and secret usage review.
       Scoring:
-      - PASS: No hardcoded SECRET_KEY or credentials. DEBUG True alone does NOT force PARTIAL/FAIL.
-      - PARTIAL: No secrets exposed but some risky config (DEBUG True + wide ALLOWED_HOSTS, or missing use of env for DB).
-      - FAIL: SECRET_KEY or credentials plainly hardcoded OR obvious sensitive token in code.
+      - PASS: SECRET_KEY and DB credentials are NOT hardcoded. (They are loaded from env vars).
+      - FAIL: SECRET_KEY or DB credentials (password) are plainly hardcoded.
+      
       Output:
-      PASS|PARTIAL|FAIL - short reason
+      PASS|FAIL - reason
       Suggestions:
-      - bullet list (only if PARTIAL/FAIL)
+      - bullet list (only if FAIL)
 
       CONTEXT:
       ---
       {context}
       ---
 
-  - name: "S2.3: Functions and views are not excessively complex"
-    type: "ai_check"
-    files_to_analyze: ["views.py", "models.py"]
-    per_file_char_limit: 5000
-    total_context_char_limit: 9000
-    prompt: >
-      Complexity review (beginner tolerance).
-      Scoring:
-      - PASS: Functions mostly short/medium; nesting shallow; any long function still linear/readable.
-      - PARTIAL: A few (1–2) long or moderately nested functions but not pervasive; still maintainable.
-      - FAIL: Several (>=3) very long AND deeply nested / tangled functions or clear spaghetti patterns.
-      Output:
-      PASS|PARTIAL|FAIL - brief reason
-      Hotspots:
-      - function_name (why)  (list only if PARTIAL/FAIL)
+  - name: "R3.3: Sensitive files and virtual environments are ignored"
+    type: "file_exists"
+    path: ".gitignore"
+    recursive: true
 
-      CONTEXT:
-      ---
-      {context}
-      ---
+  - name: "R3.4: Example environment file present"
+    type: "file_exists"
+    paths: [".env.example", "example.env", "env.sample"]
 
-  # --- SECTION 3: VERSION CONTROL (GIT) ---
-  - name: "S3.1: Sufficient commit history exists"
-    type: "git_commit_count"
-    min_commits: 3
-
-  - name: "S3.2: Git commit messages are meaningful and follow conventions"
+  # --- R4: Git Properly Used (0-1 pt) ---
+  - name: "R4.1: Git history is sufficient and meaningful"
     type: "ai_check"
     context_source: "git_log"
     git_log_depth: 40
     prompt: >
-      Git message quality (beginner).
+      Git log review (beginner). Check two things: 
+      (1) Is there more than 3 commits?
+      (2) Are the messages meaningful (not just "update", "fix")?
+      
       Scoring:
-      - PASS: Majority (>=60%) of commits have descriptive messages (even without Conventional prefix).
-      - PARTIAL: 40–59% descriptive OR too many generic messages but some are ok.
-      - FAIL: Very sparse history (1–2 commits) OR most messages meaningless (“update”, “fix”, “stuff”).
+      - PASS: Yes to both. History has > 3 commits AND the majority (>60%) are descriptive.
+      - PARTIAL: Meets only one criteria (e.g., > 3 commits but all are meaningless, OR only 2-3 good commits).
+      - FAIL: No to both. Very few commits (<=3) AND messages are meaningless.
+      
       Output:
       PASS|PARTIAL|FAIL - short reason
-      Improvements:
-      - bullet 1
-      - bullet 2 (max 3)
+      Suggestions:
+      - bullet 1 (max 3)
 
       CONTEXT (GIT LOG):
       ---
       {context}
       ---
 
-  # --- SECTION 4: DJANGO-SPECIFIC BEST PRACTICES ---
-  - name: "S4.1: Follows 'Fat Models, Skinny Views' philosophy"
+  # --- R5: Original Idea (0-1 pt) ---
+  - name: "R5.1: Project appears to be an original concept"
     type: "ai_check"
-    files_to_analyze: ["models.py", "views.py"]
+    files_to_analyze: ["README.md", "settings.py"]
     per_file_char_limit: 6000
-    total_context_char_limit: 11000
+    total_context_char_limit: 12000
     prompt: >
-      Evaluate distribution of business logic.
+      Assess if a BEGINNER project is an original idea or a direct tutorial clone. Look at the README description and project name in settings. Be generous.
+      
       Scoring:
-      - PASS: Views mostly thin; heavy logic either absent or acceptably small.
-      - PARTIAL: Some (1–2) views contain logic that could move to model/helpers, but not systemic.
-      - FAIL: Many views hold large business logic blocks that clearly belong in models/services.
-      Output:
-      PASS|PARTIAL|FAIL - reason
-      Suggestions:
-      - bullet list (only if PARTIAL/FAIL)
+      - PASS: Appears to be an original concept or a customized/extended version of a common idea (e.g., "a blog for hikers", "a todo app with teams").
+      - FAIL: Appears to be a direct, unmodified clone of a very common tutorial (e.g., the standard "Django Polls app", a basic "blog" with no unique features described).
+      
+      Output format:
+      PASS|FAIL - short reason (e.g., "Appears to be a standard blog tutorial" or "Project describes a unique 'job board for graduates' concept").
 
       CONTEXT:
       ---
       {context}
       ---
 
-  - name: "S4.2: URL patterns are named and well-structured"
+  # --- R7: Proper Error Handling (0-1 pt) ---
+  - name: "R7.1: Basic error handling is present in views"
     type: "ai_check"
-    files_to_analyze: ["urls.py"]
-    per_file_char_limit: 4000
-    total_context_char_limit: 4000
+    files_to_analyze: ["views.py"]
+    per_file_char_limit: 8000
+    total_context_char_limit: 8000
     prompt: >
-      URL naming assessment.
+      Review beginner Django views for basic error handling.
+      Look for: (1) Use of try/except blocks for ORM calls that might fail (e.g., .get()), (2) Handling of non-existent objects (404s), (3) Validation checks (e.g., `serializer.is_valid()`).
+      
       Scoring:
-      - PASS: >70% of patterns have a name; structure readable.
-      - PARTIAL: 40–70% named OR inconsistent naming; rest still understandable.
-      - FAIL: Majority unnamed or chaotic organization.
-      Output:
-      PASS|PARTIAL|FAIL - short reason
-      Missing:
-      - pattern detail (only if PARTIAL/FAIL)
+      - PASS: Basic error handling is present. Uses try/except, get_object_or_404, or checks .is_valid() before saving.
+      - FAIL: No visible error handling. Bare .get() calls without try/except, no 404s, assumes data is always valid.
+      
+      Output format:
+      PASS|FAIL - short reason
+      Suggestions:
+      - bullet list (only if FAIL)
 
       CONTEXT:
       ---
       {context}
       ---
 
-  # --- SECTION 5: ENV / DEPLOYMENT ---
-
-  - name: "S5.2: Example environment file present"
-    type: "file_exists"
-    paths: [".env.example", "example.env", "env.sample"]
-
-  - name: "S5.4: Settings use environment variables for secrets"
+  # --- R8: Provided API Documentation (0-1 pt) ---
+  - name: "R8.1: API Documentation is provided"
     type: "ai_check"
-    files_to_analyze: ["settings.py"]
+    files_to_analyze: ["README.md", "urls.py"]
     per_file_char_limit: 6000
-    total_context_char_limit: 6000
+    total_context_char_limit: 12000
     prompt: >
-      Environment variable usage for secrets.
+      Check if API documentation is provided.
+      Look for (1) an "API" or "Endpoints" section in the README, OR (2) setup for Swagger/Redoc in urls.py.
+      
       Scoring:
-      - PASS: SECRET_KEY and DB credentials not hardcoded.
-      - PARTIAL: Secrets not hardcoded but env usage inconsistent (e.g. DEBUG or other config inline).
-      - FAIL: SECRET_KEY or credentials plainly hardcoded.
-      Output:
-      PASS|PARTIAL|FAIL - reason
-      Suggestions:
-      - bullet list (only if PARTIAL/FAIL)
+      - PASS: Found either a clear API section in the README OR urls for an auto-generated doc (Swagger/Redoc).
+      - FAIL: Found neither.
+      
+      Output format:
+      PASS|FAIL - short reason
 
       CONTEXT:
       ---

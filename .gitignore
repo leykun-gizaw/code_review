@@ -9,3 +9,4 @@ final_scores.md
 .final_score_cache.json
 node_modules/
 error.log
+__pycache__/

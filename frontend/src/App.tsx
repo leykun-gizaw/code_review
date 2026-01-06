@@ -8,7 +8,7 @@ export default function App() {
   return (
     <div className="h-screen w-screen flex overflow-hidden text-slate-800">
       {/* Left Pane */}
-      <div className="w-[44%] min-w-[420px] max-w-[720px] border-r border-slate-200 flex flex-col bg-slate-50/40">
+      <div className="w-[48%] min-w-[520px] max-w-[920px] border-r border-slate-200 flex flex-col bg-slate-50/40">
         <div className="p-4 border-b bg-white/80 backdrop-blur">
           <h1 className="text-lg font-semibold tracking-tight">
             Repository Analyzer
@@ -16,7 +16,10 @@ export default function App() {
         </div>
         <div className="p-4 space-y-4 overflow-y-auto custom-scroll">
           <RunForm onCreated={(id) => setCurrentId(id)} />
-          <RunsTable onSelect={(id) => setCurrentId(id)} />
+          <RunsTable
+            onSelect={(id) => setCurrentId(id)}
+            currentId={currentId}
+          />
         </div>
       </div>
       {/* Right Pane */}
