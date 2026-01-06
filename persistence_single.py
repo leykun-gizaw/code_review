@@ -75,11 +75,20 @@ def get_run(run_id: int) -> Optional[Dict[str, Any]]:
         return dict(zip(cols, row))
 
 
+def list_cohorts() -> list[Dict[str, Any]]:
+    """Return all cohorts."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, name FROM cohorts ORDER BY name ASC")
+        rows = cur.fetchall() or []
+        cols = [d.name for d in cur.description]  # type: ignore[attr-defined]
+        return [dict(zip(cols, r)) for r in rows]
+
+
 def list_runs(limit: int = 100) -> list[Dict[str, Any]]:
     """Return recent runs ordered by id desc (limited)."""
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT id, email, github_url, status, overall_score, commit_hash, branch_name, api_key_label, created_at, updated_at FROM analysis_runs ORDER BY id DESC LIMIT %s",
+            "SELECT a.id, a.email, a.github_url, a.status, a.overall_score, a.commit_hash, a.branch_name, a.api_key_label, a.created_at, a.updated_at, c.name AS cohort_name, c.id as cohort_id FROM analysis_runs a LEFT JOIN cohorts c ON c.id = a.cohort_id ORDER BY a.id DESC LIMIT %s",
             (limit,),
         )
         rows = cur.fetchall() or []

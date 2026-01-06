@@ -43,6 +43,10 @@ export async function getRun(id: number) {
   return jsonFetch<RunRow>(`${API_BASE}/runs/${id}`);
 }
 
+export async function getAvailableCohorts() {
+  return jsonFetch<{ id: string; name: string }[]>(`${API_BASE}/cohorts`);
+}
+
 export async function listRuns(limit = 100) {
   return jsonFetch<RunRow[]>(`${API_BASE}/runs?limit=${limit}`);
 }

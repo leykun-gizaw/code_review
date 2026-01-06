@@ -76,6 +76,25 @@ criteria:
       SCORE: <value>
       JUSTIFICATION: <Reason based on R5.1 PASS/FAIL status>
 
+  - id: features_work
+    name: "Features Work as Intended"
+    weight: 1
+    prompt: |
+      You are grading a BEGINNER project. Use ONLY analyzer output totals to INFER if features work.
+      This is a heuristic guess based on project health.
+      
+      Heuristics (junior-friendly):
+        - Majority PASS (>50% of all checks) + few FAILs => 0.7–0.9 (Assume core features run).
+        - Mix of PASS/PARTIAL/FAIL, no critical FAILs (e.g., R3.1 not FAIL) => 0.5–0.6 (Probably has some working parts).
+        - Several critical FAILs (e.g., R3.1: FAIL or R3.2: FAIL) => 0.2–0.4 (Unlikely to run).
+        - Overwhelming FAIL signals => 0.0–0.1 (Definitely broken).
+        - If evidence thin but not negative: default to 0.5.
+
+      Allowed values: 0.0, 0.1, ..., 1.0 (step 0.1)
+      Output strictly two lines:
+      SCORE: <value>
+      JUSTIFICATION: <Concise reason referencing overall PASS/PARTIAL/FAIL counts>
+
   - id: error_handling
     name: "Proper Error Handling"
     weight: 1
@@ -107,22 +126,3 @@ criteria:
       Output strictly two lines:
       SCORE: <value>
       JUSTIFICATION: <Reason based on R8.1 PASS/FAIL status>
-
-  - id: features_work
-    name: "Features Work as Intended"
-    weight: 1
-    prompt: |
-      You are grading a BEGINNER project. Use ONLY analyzer output totals to INFER if features work.
-      This is a heuristic guess based on project health.
-      
-      Heuristics (junior-friendly):
-        - Majority PASS (>50% of all checks) + few FAILs => 0.7–0.9 (Assume core features run).
-        - Mix of PASS/PARTIAL/FAIL, no critical FAILs (e.g., R3.1 not FAIL) => 0.5–0.6 (Probably has some working parts).
-        - Several critical FAILs (e.g., R3.1: FAIL or R3.2: FAIL) => 0.2–0.4 (Unlikely to run).
-        - Overwhelming FAIL signals => 0.0–0.1 (Definitely broken).
-        - If evidence thin but not negative: default to 0.5.
-
-      Allowed values: 0.0, 0.1, ..., 1.0 (step 0.1)
-      Output strictly two lines:
-      SCORE: <value>
-      JUSTIFICATION: <Concise reason referencing overall PASS/PARTIAL/FAIL counts>

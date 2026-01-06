@@ -17,6 +17,7 @@ from persistence_single import (
     store_analyzer_outputs,
     store_scorer_outputs,
     update_run_metadata,
+    list_cohorts,
 )
 from analyzer import run_analyzer, ANALYZER_TOOL_VERSION
 from final_scorer import run_final_scorer, SCORER_TOOL_VERSION
@@ -204,6 +205,13 @@ def enqueue_run(run_id: int):
     return jsonify({"queued": True, "id": run_id})
 
 
+@app.route("/cohorts", methods=["GET"])
+def list_cohorts_endpoint():
+    data = list_cohorts()
+    logger.info(data)
+    return jsonify(data)
+
+
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=int(os.getenv("API_PORT", "5000")))
+    app.run(host="0.0.0.0", port=int(os.getenv("API_PORT", "5000")), debug=True)

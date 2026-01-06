@@ -4,10 +4,11 @@ import clsx from "clsx";
 
 interface Props {
   onSelect(id: number): void;
+  currentCohortId?: string | null;
   currentId: number | null;
 }
 
-export function RunsTable({ onSelect, currentId }: Props) {
+export function RunsTable({ onSelect, currentCohortId, currentId }: Props) {
   const [rows, setRows] = useState<RunRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +93,7 @@ export function RunsTable({ onSelect, currentId }: Props) {
             <tr>
               <th className="px-3 py-2 text-left font-medium">ID</th>
               <th className="px-3 py-2 text-left font-medium">Email</th>
+              <th className="px-3 py-2 text-left font-medium">Cohort</th>
               <th className="px-3 py-2 text-left font-medium">Repository</th>
               <th className="px-3 py-2 text-left font-medium">Status</th>
               <th className="px-3 py-2 text-left font-medium">Score</th>
@@ -99,55 +101,65 @@ export function RunsTable({ onSelect, currentId }: Props) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr
-                key={r.id}
-                className={clsx("border-t border-slate-100 hover:bg-slate-50", {
-                  "bg-slate-100": currentId === r.id,
-                })}
-              >
-                <td className="px-3 py-2 font-medium text-slate-800">
-                  <button
-                    onClick={() => onSelect(r.id)}
-                    className="underline decoration-dotted"
-                  >
-                    {r.id}
-                  </button>
-                </td>
-                <td className="px-3 py-2">{r.email}</td>
-                <td className="px-3 py-2 max-w-[220px] truncate">
-                  <a
-                    href={r.github_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-500 hover:text-blue-700 underline"
-                  >
-                    Repo Link
-                  </a>
-                </td>
-                <td className="px-3 py-2">{statusBadge(r.status)}</td>
-                <td className="px-3 py-2">
-                  {r.overall_score != null ? r.overall_score : "—"}
-                </td>
-                <td className="px-3 py-2 space-x-2 flex">
-                  {(r.status === "PENDING" || r.status === "ERROR") && (
-                    <button
-                      disabled={busy === r.id}
-                      onClick={() => analyze(r.id)}
-                      className="px-2 py-1 rounded bg-blue-600 text-white text-xs font-semibold disabled:opacity-50"
-                    >
-                      {busy === r.id ? "…" : "Analyze"}
-                    </button>
+            {rows
+              .filter((r) =>
+                currentCohortId && currentCohortId !== "All Cohorts"
+                  ? r.cohort_id === currentCohortId
+                  : true
+              )
+              .map((r) => (
+                <tr
+                  key={r.id}
+                  className={clsx(
+                    "border-t border-slate-100 hover:bg-slate-50",
+                    {
+                      "bg-slate-100": currentId === r.id,
+                    }
                   )}
-                  <button
-                    onClick={() => onSelect(r.id)}
-                    className="px-2 py-1 rounded border border-slate-300 text-xs flex-1"
-                  >
-                    View
-                  </button>
-                </td>
-              </tr>
-            ))}
+                >
+                  <td className="px-3 py-2 font-medium text-slate-800">
+                    <button
+                      onClick={() => onSelect(r.id)}
+                      className="underline decoration-dotted"
+                    >
+                      {r.id}
+                    </button>
+                  </td>
+                  <td className="px-3 py-2">{r.email}</td>
+                  <td className="px-3 py-2">{r.cohort_name}</td>
+                  <td className="px-3 py-2 max-w-[220px] truncate">
+                    <a
+                      href={r.github_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 hover:text-blue-700 underline"
+                    >
+                      Repo Link
+                    </a>
+                  </td>
+                  <td className="px-3 py-2">{statusBadge(r.status)}</td>
+                  <td className="px-3 py-2">
+                    {r.overall_score != null ? r.overall_score : "—"}
+                  </td>
+                  <td className="px-3 py-2 space-x-2 flex">
+                    {(r.status === "PENDING" || r.status === "ERROR") && (
+                      <button
+                        disabled={busy === r.id}
+                        onClick={() => analyze(r.id)}
+                        className="px-2 py-1 rounded bg-blue-600 text-white text-xs font-semibold disabled:opacity-50"
+                      >
+                        {busy === r.id ? "…" : "Analyze"}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onSelect(r.id)}
+                      className="px-2 py-1 rounded border border-slate-300 text-xs flex-1"
+                    >
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))}
             {rows.length === 0 && (
               <tr>
                 <td
